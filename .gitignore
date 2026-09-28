@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+dist/
+out/
+
+# Environment & secrets
+.env
+.env.local
+.env.production
+
+# API keys & sensitive configs
+litellm_config.yaml
+*.yaml
+*.yml
+
+# Logs
+*.log
+out.log
+err.log
+dev_out.txt
+dev_err.txt
+logs/
+
+# Build output
+dist/
+build/
+
+# VS Code
+.vscode/settings.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Extension package
+*.vsix
+
+# Misc
+.kilo/

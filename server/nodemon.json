@@ -1,0 +1,6 @@
+{
+  "watch": ["src"],
+  "ext": "ts",
+  "ignore": ["src/**/*.test.ts"],
+  "exec": "node --max-old-space-size=512 node_modules/ts-node/dist/bin.js --transpile-only src/index.ts"
+}
