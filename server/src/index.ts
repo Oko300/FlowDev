@@ -6,7 +6,7 @@ import { Server as SocketServer } from "socket.io";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
-
+import { adminRouter, validateToken } from './admin';
 dotenv.config();
 
 const app = express();
@@ -15,6 +15,7 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
+app.use(adminRouter);
 
 // ─────────────────────────────────────────
 // SOCKET.IO — relay bridge to VS Code extension
@@ -320,16 +321,21 @@ mcp.tool(
 
 // Streamable HTTP transport (required by Claude.ai)
 app.all("/mcp", async (req, res) => {
-  console.log(`🤖 Claude connected via ${req.method}`);
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: undefined,
-  });
-  res.on("close", () => {
-    transport.close();
-    console.log("Claude disconnected.");
-  });
-  await mcp.connect(transport);
-  await transport.handleRequest(req, res, req.body);
+const token = (req.query.token as string) || req.headers['x-flowdev-token'] as string;
+if (token && !validateToken(token)) {
+res.status(401).json({ error: "Invalid or revoked token. Request access at /request" });
+return;
+}
+console.log("🤖 Claude connected via POST");
+const transport = new StreamableHTTPServerTransport({
+sessionIdGenerator: undefined,
+});
+res.on("close", () => {
+transport.close();
+console.log("Claude disconnected.");
+});
+await mcp.connect(transport);
+await transport.handleRequest(req, res, req.body);
 });
 
 // OAuth discovery - required by Claude.ai to connect
