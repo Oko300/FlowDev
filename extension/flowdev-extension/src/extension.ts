@@ -28,7 +28,7 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 function connectToServer() {
-  const serverUrl = 'http://localhost:3000';
+  const serverUrl = 'https://flowdev.onrender.com';
 
   if (socket) {
     socket.disconnect();
