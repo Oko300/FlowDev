@@ -2,7 +2,7 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
 export const adminRouter = express.Router();
 
@@ -31,22 +31,16 @@ function generateToken() {
 
 // Send email notification
 async function sendEmail(to: string, subject: string, html: string) {
-  const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.EMAIL_PASSWORD,
-    },
-  });
-  await transporter.verify();
-  await transporter.sendMail({
-    from: `"FlowDev" <${process.env.SMTP_USER}>`,
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  const { error } = await resend.emails.send({
+    from: 'FlowDev <onboarding@resend.dev>',
     to,
     subject,
     html,
   });
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
 // ── PUBLIC: Request access page ──────────
