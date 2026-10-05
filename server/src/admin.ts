@@ -89,7 +89,7 @@ adminRouter.get('/request', (req, res) => {
       <label>Full Name</label>
       <input type="text" name="name" placeholder="Your name" required>
       <label>Email Address</label>
-      <input type="email" name="email" placeholder="you@example.com" pattern="[^\s@]+@[^\s@]+\.[^\s@]+" required>
+      <input type="email" name="email" placeholder="you@example.com" required>
       <label>What do you want to build?</label>
       <textarea name="reason" placeholder="Tell me what you're working on..." required></textarea>
       <label>Preferred contact</label>
