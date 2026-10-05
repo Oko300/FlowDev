@@ -84,11 +84,12 @@ adminRouter.get('/request', (req, res) => {
     <div class="logo">Flow<span>Dev</span></div>
     <p class="tagline">AI-powered coding assistant — request access below</p>
     <div class="success" id="success">✅ Request submitted! You'll hear back soon via email.</div>
+    <div id="error-msg" style="background:#2e1111;border:1px solid #dc2626;border-radius:8px;padding:12px 16px;color:#f87171;display:none;margin-bottom:16px;font-size:14px"></div>
     <form id="form">
       <label>Full Name</label>
       <input type="text" name="name" placeholder="Your name" required>
       <label>Email Address</label>
-      <input type="email" name="email" placeholder="you@example.com" required>
+      <input type="email" name="email" placeholder="you@example.com" pattern="[^\s@]+@[^\s@]+\.[^\s@]+" required>
       <label>What do you want to build?</label>
       <textarea name="reason" placeholder="Tell me what you're working on..." required></textarea>
       <label>Preferred contact</label>
@@ -127,11 +128,18 @@ adminRouter.get('/request', (req, res) => {
           body: JSON.stringify(data)
         });
 
-        if (res.ok) {
+        const result = await res.json();
+        if (res.ok && result.success) {
           success.style.display = 'block';
           form.style.display = 'none';
         } else {
-          throw new Error('Server error');
+          const errorMsg = result.error || 'Something went wrong. Please try again.';
+          btn.textContent = 'Request Access →';
+          btn.disabled = false;
+          btn.style.opacity = '1';
+          const errorDiv = document.getElementById('error-msg');
+          errorDiv.textContent = errorMsg;
+          errorDiv.style.display = 'block';
         }
       } catch (err) {
         btn.textContent = 'Request Access →';
@@ -149,6 +157,13 @@ adminRouter.get('/request', (req, res) => {
 // ── PUBLIC: Submit request ────────────────
 adminRouter.post('/request', async (req, res) => {
   const { name, email, reason, contactMethod, contactHandle } = req.body;
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    res.status(400).json({ success: false, error: 'Please enter a valid email address' });
+    return;
+  }
+
   const data = readData();
 
   const alreadyExists = data.requests.some(
@@ -171,8 +186,9 @@ adminRouter.post('/request', async (req, res) => {
   };
   data.requests.push(request);
   writeData(data);
+  res.json({ success: true }); // respond immediately
 
-  // Notify admin by email
+  // send email in background - do not await before responding
   try {
     await sendEmail(
       process.env.ADMIN_EMAIL!,
@@ -192,8 +208,6 @@ adminRouter.post('/request', async (req, res) => {
   } catch (e: any) {
     console.error('Admin notification email failed:', e.message);
   }
-
-  res.json({ success: true });
 });
 
 // ── ADMIN: Dashboard ──────────────────────
@@ -349,9 +363,11 @@ adminRouter.post('/admin/approve/:id', async (req, res) => {
   };
   data.users.push(user);
   writeData(data);
+  res.json({ success: true, token });
 
   // Email the user their token
   try {
+    console.log('Sending approval email to:', request.email, 'via SMTP user:', process.env.SMTP_USER);
     await sendEmail(
       request.email,
       '✅ Your FlowDev access is approved!',
@@ -381,10 +397,10 @@ adminRouter.post('/admin/approve/:id', async (req, res) => {
 </div>
 `
     );
+    console.log('Approval email sent successfully to:', request.email);
   } catch (e: any) {
     console.error('Approval email failed:', e.message);
   }
-  res.json({ success: true, token });
 });
 
 // ── ADMIN: Deny request ───────────────────
