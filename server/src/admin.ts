@@ -109,13 +109,35 @@ adminRouter.get('/request', (req, res) => {
     </div>
   </div>
   <script>
-    document.getElementById('form').addEventListener('submit', async (e) => {
+    const form = document.getElementById('form');
+    const btn = form.querySelector('button');
+    const success = document.getElementById('success');
+
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const data = Object.fromEntries(new FormData(e.target));
-      const res = await fetch('/request', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
-      if (res.ok) {
-        document.getElementById('success').style.display = 'block';
-        e.target.reset();
+      btn.textContent = 'Sending...';
+      btn.disabled = true;
+      btn.style.opacity = '0.7';
+
+      try {
+        const data = Object.fromEntries(new FormData(e.target));
+        const res = await fetch('/request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+
+        if (res.ok) {
+          success.style.display = 'block';
+          form.style.display = 'none';
+        } else {
+          throw new Error('Server error');
+        }
+      } catch (err) {
+        btn.textContent = 'Request Access →';
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        alert('Something went wrong. Please try again.');
       }
     });
   </script>
@@ -190,8 +212,8 @@ adminRouter.get('/admin', (req, res) => {
       <td>${r.contactMethod}: ${r.contactHandle || '-'}</td>
       <td>${new Date(r.createdAt).toLocaleDateString()}</td>
       <td>
-        <button onclick="approve('${r.id}')" style="background:#16a34a;color:white;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;margin-right:6px">Approve</button>
-        <button onclick="deny('${r.id}')" style="background:#dc2626;color:white;border:none;padding:6px 12px;border-radius:6px;cursor:pointer">Deny</button>
+        <button onclick="approve('${r.id}', this)" style="background:#16a34a;color:white;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;margin-right:6px">Approve</button>
+        <button onclick="deny('${r.id}', this)" style="background:#dc2626;color:white;border:none;padding:6px 12px;border-radius:6px;cursor:pointer">Deny</button>
       </td>
     </tr>
   `).join('');
@@ -202,7 +224,7 @@ adminRouter.get('/admin', (req, res) => {
       <td>${u.email}</td>
       <td><code style="background:#1a1a1a;padding:2px 6px;border-radius:4px;font-size:12px">${u.token.slice(0,16)}...</code></td>
       <td>${new Date(u.approvedAt).toLocaleDateString()}</td>
-      <td><button onclick="revoke('${u.id}')" style="background:#7c3aed;color:white;border:none;padding:6px 12px;border-radius:6px;cursor:pointer">Revoke</button></td>
+      <td><button onclick="revoke('${u.id}', this)" style="background:#7c3aed;color:white;border:none;padding:6px 12px;border-radius:6px;cursor:pointer">Revoke</button></td>
     </tr>
   `).join('');
 
@@ -247,17 +269,58 @@ adminRouter.get('/admin', (req, res) => {
   </div>
   <script>
     const key = new URLSearchParams(location.search).get('key');
-    async function approve(id) {
-      await fetch('/admin/approve/' + id + '?key=' + key, {method:'POST'});
-      location.reload();
+
+    function setLoading(btn, text) {
+      btn.textContent = text;
+      btn.disabled = true;
+      btn.style.opacity = '0.6';
     }
-    async function deny(id) {
-      await fetch('/admin/deny/' + id + '?key=' + key, {method:'POST'});
-      location.reload();
+
+    async function approve(id, btn) {
+      setLoading(btn, 'Approving...');
+      try {
+        const res = await fetch('/admin/approve/' + id + '?key=' + key, { method: 'POST' });
+        if (res.ok) {
+          location.reload();
+        } else {
+          alert('Approve failed. Check server logs.');
+          location.reload();
+        }
+      } catch (err) {
+        alert('Network error. Try again.');
+        location.reload();
+      }
     }
-    async function revoke(id) {
-      if(confirm('Revoke this user token?')) {
-        await fetch('/admin/revoke/' + id + '?key=' + key, {method:'POST'});
+
+    async function deny(id, btn) {
+      setLoading(btn, 'Denying...');
+      try {
+        const res = await fetch('/admin/deny/' + id + '?key=' + key, { method: 'POST' });
+        if (res.ok) {
+          location.reload();
+        } else {
+          alert('Deny failed.');
+          location.reload();
+        }
+      } catch (err) {
+        alert('Network error. Try again.');
+        location.reload();
+      }
+    }
+
+    async function revoke(id, btn) {
+      if (!confirm('Revoke this user token? They will lose access immediately.')) return;
+      setLoading(btn, 'Revoking...');
+      try {
+        const res = await fetch('/admin/revoke/' + id + '?key=' + key, { method: 'POST' });
+        if (res.ok) {
+          location.reload();
+        } else {
+          alert('Revoke failed.');
+          location.reload();
+        }
+      } catch (err) {
+        alert('Network error. Try again.');
         location.reload();
       }
     }
@@ -293,20 +356,30 @@ adminRouter.post('/admin/approve/:id', async (req, res) => {
       request.email,
       '✅ Your FlowDev access is approved!',
       `
-        <h2>Welcome to FlowDev, ${request.name}!</h2>
-        <p>Your access has been approved. Here is how to connect:</p>
-        <br>
-        <p><strong>Step 1:</strong> Go to Claude.ai → Settings → Connectors → Add</p>
-        <p><strong>Step 2:</strong> Paste this URL:</p>
-        <code style="background:#f3f4f6;padding:12px;display:block;border-radius:8px;margin:12px 0;font-size:14px">
-          ${process.env.PUBLIC_URL}/mcp?token=${token}
-        </code>
-        <p><strong>Step 3:</strong> Name it "FlowDev" and connect</p>
-        <br>
-        <p>Keep your token private — it gives access to your coding workspace.</p>
-        <br>
-        <p>Need help? Reach me on <a href="https://x.com/success_o1">X @success_o1</a></p>
-      `
+<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">
+  <h2 style="color:#111">Welcome to FlowDev, ${request.name}!</h2>
+  <p style="color:#444">Your access has been approved. Here is everything you need to get connected.</p>
+  
+  <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
+  
+  <h3 style="color:#111">Step 1 — Install the VS Code Extension</h3>
+  <p style="color:#444">Open VS Code, go to Extensions, search <strong>FlowDev MCP</strong> and install it.</p>
+  <p style="color:#444">Or install directly from: <a href="https://marketplace.visualstudio.com/items?itemName=successo.flowdevmcp">VS Code Marketplace</a></p>
+
+  <h3 style="color:#111;margin-top:24px">Step 2 — Enter Your Token in VS Code</h3>
+  <p style="color:#444">Click the FlowDev icon in the bottom-left status bar and select <strong>Enter Token</strong>. Paste your token below:</p>
+  <code style="background:#f3f4f6;padding:12px 16px;display:block;border-radius:8px;margin:12px 0;font-size:13px;word-break:break-all;color:#111">${token}</code>
+
+  <h3 style="color:#111;margin-top:24px">Step 3 — Add the MCP Connector in Your AI App</h3>
+  <p style="color:#444">In Claude.ai go to Settings then Connectors then Add Custom Connector and paste this URL:</p>
+  <code style="background:#f3f4f6;padding:12px 16px;display:block;border-radius:8px;margin:12px 0;font-size:13px;word-break:break-all;color:#111">https://flowdev.onrender.com/mcp?token=${token}</code>
+  <p style="color:#666;font-size:13px">Works with any MCP-compatible AI: Claude, Grok, GPT-4, Gemini and more.</p>
+
+  <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
+
+  <p style="color:#888;font-size:13px">Keep your token private. Need help? Reach out on <a href="https://x.com/success_o1">X @success_o1</a></p>
+</div>
+`
     );
   } catch (e: any) {
     console.error('Approval email failed:', e.message);
