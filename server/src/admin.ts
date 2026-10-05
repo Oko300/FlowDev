@@ -32,13 +32,21 @@ function generateToken() {
 // Send email notification
 async function sendEmail(to: string, subject: string, html: string) {
   const transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.EMAIL_PASSWORD,
     },
   });
-  await transporter.sendMail({ from: process.env.SMTP_USER, to, subject, html });
+  await transporter.verify();
+  await transporter.sendMail({
+    from: `"FlowDev" <${process.env.SMTP_USER}>`,
+    to,
+    subject,
+    html,
+  });
 }
 
 // ── PUBLIC: Request access page ──────────
@@ -120,6 +128,15 @@ adminRouter.get('/request', (req, res) => {
 adminRouter.post('/request', async (req, res) => {
   const { name, email, reason, contactMethod, contactHandle } = req.body;
   const data = readData();
+
+  const alreadyExists = data.requests.some(
+    (r: any) => r.email === email && (r.status === 'pending' || r.status === 'approved')
+  );
+  if (alreadyExists) {
+    res.json({ success: true, duplicate: true });
+    return;
+  }
+
   const request = {
     id: crypto.randomUUID(),
     name,
@@ -150,8 +167,8 @@ adminRouter.post('/request', async (req, res) => {
         </a>
       `
     );
-  } catch (e) {
-    console.log('Email notification failed (check EMAIL_PASSWORD in .env)');
+  } catch (e: any) {
+    console.error('Admin notification email failed:', e.message);
   }
 
   res.json({ success: true });
@@ -291,8 +308,8 @@ adminRouter.post('/admin/approve/:id', async (req, res) => {
         <p>Need help? Reach me on <a href="https://x.com/success_o1">X @success_o1</a></p>
       `
     );
-  } catch (e) {
-    console.log('Could not send approval email');
+  } catch (e: any) {
+    console.error('Approval email failed:', e.message);
   }
   res.json({ success: true, token });
 });
