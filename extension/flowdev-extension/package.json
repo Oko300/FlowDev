@@ -1,31 +1,97 @@
 {
-  "name": "flowdev-extension",
-  "displayName": "flowdev-extension",
-  "description": "FlowDev VS Code Extension",
-  "version": "0.0.1",
+  "name": "flowdevmcp",
+  "displayName": "FlowDev MCP",
+  "description": "Connect any MCP-compatible AI to your VS Code workspace. Your AI reads files, writes code, searches your codebase, runs terminal commands, and pushes to GitHub directly in your editor. Works with Claude, Cursor, Windsurf, Cline, Continue and any AI that supports MCP.",
+  "version": "1.0.7",
+  "publisher": "successO",
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#0D1117",
+    "theme": "dark"
+  },
   "engines": {
-    "vscode": "^1.138.0"
+    "vscode": "^1.85.0"
   },
   "categories": [
+    "Machine Learning",
     "Other"
   ],
-  "activationEvents": ["onStartupFinished"],
+  "keywords": [
+    "AI",
+    "MCP",
+    "model context protocol",
+    "Claude",
+    "Cursor",
+    "Windsurf",
+    "Cline",
+    "Continue",
+    "coding assistant",
+    "agentic AI",
+    "automation",
+    "code generation",
+    "github",
+    "vibe coding"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Oko300/FlowDev"
+  },
+  "homepage": "https://flowdev.onrender.com",
+  "bugs": {
+    "url": "https://github.com/Oko300/FlowDev/issues"
+  },
+  "license": "MIT",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "flowdev-sidebar",
+          "title": "FlowDev",
+          "icon": "images/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "flowdev-sidebar": [
+        {
+          "type": "webview",
+          "id": "flowdev.settingsView",
+          "name": "FlowDev"
+        }
+      ]
+    },
     "commands": [
+      {
+        "command": "flowdev.openSettings",
+        "title": "FlowDev: Open Settings"
+      },
       {
         "command": "flowdev.connect",
         "title": "FlowDev: Connect to Server"
       },
       {
-        "command": "flowdev.disconnect", 
+        "command": "flowdev.disconnect",
         "title": "FlowDev: Disconnect from Server"
+      },
+      {
+        "command": "flowdev.setToken",
+        "title": "FlowDev: Set Access Token"
+      },
+      {
+        "command": "flowdev.showStatus",
+        "title": "FlowDev: Show Status"
       }
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run bundle",
+    "bundle": "esbuild src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --target=node18 --minify",
     "compile": "tsc -p ./",
+    "typecheck": "tsc --noEmit -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
@@ -34,9 +100,10 @@
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@types/node": "^24.19.0",
-    "@types/vscode": "^1.138.0",
+    "@types/vscode": "^1.85.0",
     "@vscode/test-cli": "^0.0.15",
     "@vscode/test-electron": "^3.0.0",
+    "esbuild": "^0.25.0",
     "eslint": "^10.5.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.61.1"

@@ -9,3 +9,14 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 **/.vscode-test.*
+node_modules/**
+*.vsix
+generate-icon.js
+.kilo/**
+dev_err.txt
+dev_out.txt
+out/test/**
+*.vsix
+**/*.vsix
+src/**
+
