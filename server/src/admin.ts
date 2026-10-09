@@ -176,9 +176,10 @@ adminRouter.post('/api/admin/approve', async (req, res) => {
   approvedTokens.add(token);
   const { name, email } = rows[0];
   const mcpUrl = `${PUBLIC_URL}/mcp?token=${token}`;
-  res.json({ success: true });
+  // Send email before responding so failures surface to admin
+  let emailErr = null;
   try {
-    await resend.emails.send({
+    const result = await resend.emails.send({
       from: 'onboarding@resend.dev', to: email,
       subject: 'Your FlowDev access is approved ✅',
       html: `
@@ -205,7 +206,15 @@ adminRouter.post('/api/admin/approve', async (req, res) => {
     </div>
   `
     });
-  } catch (err: any) { console.error('Approval email failed:', err.message); }
+    if (result.error) {
+      emailErr = JSON.stringify(result.error);
+      console.error('Resend error:', emailErr);
+    }
+  } catch (err) {
+    emailErr = err.message + ' | ' + JSON.stringify(err);
+    console.error('Approval email exception:', emailErr);
+  }
+  res.json({ success: true, emailSent: !emailErr, emailError: emailErr || undefined });
 });
 
 // ── Deny ───────────────────────────────────────────────────────────────────
