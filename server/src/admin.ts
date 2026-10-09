@@ -181,17 +181,29 @@ adminRouter.post('/api/admin/approve', async (req, res) => {
     await resend.emails.send({
       from: 'onboarding@resend.dev', to: email,
       subject: 'Your FlowDev access is approved ✅',
-      html: `<h2>Welcome to FlowDev, ${name}! 🚀</h2>
-      <p>Your access has been approved.</p>
-      <h3 style="margin-top:24px">Your MCP Connector URL</h3>
-      <code style="background:#1a1a2e;color:#60a5fa;padding:12px;display:block;border-radius:6px;word-break:break-all;margin:8px 0">${mcpUrl}</code>
-      <h3 style="margin-top:24px">Setup (3 steps)</h3>
-      <ol style="margin-left:20px;line-height:2.2">
-        <li>Install the VS Code extension: <a href="https://marketplace.visualstudio.com/items?itemName=successO.flowdevmcp">FlowDev MCP on Marketplace</a></li>
-        <li>Open the FlowDev sidebar in VS Code → paste your token → click Connect</li>
-        <li>In Claude.ai → Settings → Connectors → Add Custom Connector → paste the URL above → choose <b>"No sign-in"</b> → click Add → Connect</li>
-      </ol>
-      <p style="margin-top:16px;color:#888">Keep your token private. It's tied to your email only.</p>`
+      html: `
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:520px;margin:0 auto;padding:40px">
+      <h2 style="margin:0 0 4px 0;font-size:22px;font-weight:700">Welcome to FlowDev, ${name}! <span style="color:#6366f1">⚡</span></h2>
+      <p style="color:#666;margin:0 0 32px 0;font-size:14px">Your access has been approved. Three steps and you are live.</p>
+
+      <h3 style="font-size:15px;margin:0 0 8px 0">Step 1 — Install the VS Code Extension</h3>
+      <p style="color:#555;font-size:14px;margin:0 0 6px 0">Search <strong>FlowDev MCP</strong> in the VS Code Extensions panel and install it.</p>
+      <a href="https://marketplace.visualstudio.com/items?itemName=successO.flowdevmcp" style="color:#6366f1;font-size:13px">Open in VS Code Marketplace →</a>
+
+      <h3 style="font-size:15px;margin:28px 0 8px 0">Step 2 — Paste Your Token in VS Code</h3>
+      <p style="color:#555;font-size:14px;margin:0 0 12px 0">Click the <strong>FlowDev ⚡ icon</strong> in the Activity Bar on the left side of VS Code. Paste your token below and click <strong>Connect</strong>.</p>
+      <div style="background:#f4f4f8;border-radius:6px;padding:14px 16px;font-family:monospace;font-size:13px;word-break:break-all;color:#1a1a2e;border:1px solid #e0e0e0">${token}</div>
+      <p style="color:#e05a00;font-size:12px;margin:8px 0 28px 0">⚠️ Keep this token private — it is tied to your email only.</p>
+
+      <h3 style="font-size:15px;margin:0 0 8px 0">Step 3 — Connect to Your AI</h3>
+      <p style="color:#555;font-size:14px;margin:0 0 8px 0">Once your token is pasted and VS Code shows <strong>Connected</strong>, the FlowDev sidebar will display your personal MCP URL. <strong>Copy it from there.</strong></p>
+      <p style="color:#555;font-size:14px;margin:0 0 8px 0">Then in <strong>Claude.ai</strong> go to <strong>Settings → Connectors → Add Custom Connector</strong>, paste the URL, choose <strong>"No sign-in"</strong>, and click Connect.</p>
+      <p style="color:#555;font-size:14px;margin:0">Works with Claude, Cursor, Windsurf, Cline, Continue and any MCP-compatible AI.</p>
+
+      <hr style="border:none;border-top:1px solid #eee;margin:32px 0">
+      <p style="color:#aaa;font-size:12px;margin:0">Need help? <a href="https://x.com/success_o1" style="color:#6366f1">@success_o1 on X</a> · <a href="https://github.com/Oko300/FlowDev" style="color:#6366f1">GitHub</a></p>
+    </div>
+  `
     });
   } catch (err: any) { console.error('Approval email failed:', err.message); }
 });
