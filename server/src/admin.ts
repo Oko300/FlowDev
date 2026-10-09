@@ -1,428 +1,216 @@
 import express from 'express';
-import fs from 'fs';
-import path from 'path';
 import crypto from 'crypto';
+import { neon } from '@neondatabase/serverless';
 import { Resend } from 'resend';
+
+const sql = neon(process.env.DATABASE_URL!);
+const resend = new Resend(process.env.RESEND_API_KEY);
+const ADMIN_KEY = process.env.ADMIN_KEY || 'flowdev-admin-2024-secret';
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'spidy9058@gmail.com';
+const PUBLIC_URL = process.env.PUBLIC_URL || 'https://flowdev.onrender.com';
+
+// ── In-memory token cache keeps validateToken() synchronous ───────────────
+const approvedTokens = new Set<string>();
+
+export async function initDB() {
+  await sql`
+    CREATE TABLE IF NOT EXISTS fd_users (
+      id        SERIAL PRIMARY KEY,
+      name      TEXT NOT NULL,
+      email     TEXT NOT NULL,
+      reason    TEXT,
+      status    TEXT NOT NULL DEFAULT 'pending',
+      token     TEXT,
+      requested_at TIMESTAMPTZ DEFAULT NOW(),
+      approved_at  TIMESTAMPTZ
+    )
+  `;
+  const rows = await sql`
+    SELECT token FROM fd_users WHERE status = 'approved' AND token IS NOT NULL
+  `;
+  rows.forEach((r: any) => { if (r.token) approvedTokens.add(r.token); });
+  console.log(`✅ DB ready — ${approvedTokens.size} active token(s) loaded`);
+}
+
+export function validateToken(token: string): boolean {
+  return approvedTokens.has(token);
+}
 
 export const adminRouter = express.Router();
 
-const DATA_FILE = path.join(__dirname, '../../data/users.json');
-
-// Make sure data folder exists
-function ensureDataFile() {
-  const dir = path.dirname(DATA_FILE);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, JSON.stringify({ requests: [], users: [] }, null, 2));
-}
-
-function readData() {
-  ensureDataFile();
-  return JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
-}
-
-function writeData(data: any) {
-  ensureDataFile();
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-}
-
-function generateToken() {
-  return crypto.randomBytes(32).toString('hex');
-}
-
-// Send email notification
-async function sendEmail(to: string, subject: string, html: string) {
-  const resend = new Resend(process.env.RESEND_API_KEY);
-  const { error } = await resend.emails.send({
-    from: 'FlowDev <onboarding@resend.dev>',
-    to,
-    subject,
-    html,
-  });
-  if (error) {
-    throw new Error(error.message);
-  }
-}
-
-// ── PUBLIC: Request access page ──────────
-adminRouter.get('/request', (req, res) => {
-  res.send(`
-<!DOCTYPE html>
-<html lang="en">
+// ── Request form ───────────────────────────────────────────────────────────
+adminRouter.get('/request', (_req, res) => {
+  res.send(`<!DOCTYPE html>
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Request Access — FlowDev</title>
+  <title>Request FlowDev Access</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0a; color: #e5e5e5; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
-    .card { background: #111; border: 1px solid #222; border-radius: 16px; padding: 40px; max-width: 480px; width: 100%; }
-    .logo { font-size: 28px; font-weight: 700; color: #fff; margin-bottom: 8px; }
-    .logo span { color: #6366f1; }
-    .tagline { color: #888; font-size: 14px; margin-bottom: 32px; }
-    label { display: block; font-size: 13px; color: #aaa; margin-bottom: 6px; font-weight: 500; }
-    input, textarea, select { width: 100%; background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px; padding: 10px 14px; color: #e5e5e5; font-size: 14px; margin-bottom: 16px; outline: none; transition: border-color 0.2s; font-family: inherit; }
-    input:focus, textarea:focus, select:focus { border-color: #6366f1; }
-    textarea { resize: vertical; min-height: 80px; }
-    button { width: 100%; background: #6366f1; color: white; border: none; border-radius: 8px; padding: 12px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
-    button:hover { background: #5558e3; }
-    .social { margin-top: 28px; padding-top: 24px; border-top: 1px solid #1f1f1f; text-align: center; }
-    .social p { color: #666; font-size: 13px; margin-bottom: 12px; }
-    .social-links { display: flex; gap: 12px; justify-content: center; }
-    .social-links a { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border: 1px solid #2a2a2a; border-radius: 8px; color: #aaa; text-decoration: none; font-size: 13px; transition: all 0.2s; }
-    .social-links a:hover { border-color: #6366f1; color: #fff; }
-    .success { background: #0f2e1a; border: 1px solid #16a34a; border-radius: 8px; padding: 16px; color: #4ade80; display: none; margin-bottom: 16px; }
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+    .card{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:40px;max-width:480px;width:100%}
+    .logo{font-size:24px;font-weight:700;margin-bottom:4px}.logo span{color:#6366f1}
+    .sub{color:#8b949e;font-size:14px;margin-bottom:32px}
+    h2{font-size:18px;margin-bottom:24px}
+    label{display:block;font-size:13px;color:#8b949e;margin-bottom:6px;font-weight:500}
+    input,textarea{width:100%;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:10px 14px;color:#e6edf3;font-size:14px;margin-bottom:16px;font-family:inherit;outline:none}
+    input:focus,textarea:focus{border-color:#6366f1}
+    textarea{height:80px;resize:vertical}
+    button{width:100%;background:#6366f1;color:white;border:none;padding:12px;border-radius:6px;font-size:15px;font-weight:600;cursor:pointer}
+    button:hover{background:#5558e3}
+    .msg{padding:12px 16px;border-radius:6px;margin-bottom:16px;font-size:13px;display:none}
+    .ok{background:#14532d;color:#4ade80;border:1px solid #166534}
+    .err{background:#3b1515;color:#f87171;border:1px solid #7f1d1d}
   </style>
 </head>
 <body>
   <div class="card">
     <div class="logo">Flow<span>Dev</span></div>
-    <p class="tagline">AI-powered coding assistant — request access below</p>
-    <div class="success" id="success">✅ Request submitted! You'll hear back soon via email.</div>
-    <div id="error-msg" style="background:#2e1111;border:1px solid #dc2626;border-radius:8px;padding:12px 16px;color:#f87171;display:none;margin-bottom:16px;font-size:14px"></div>
-    <form id="form">
-      <label>Full Name</label>
-      <input type="text" name="name" placeholder="Your name" required>
+    <p class="sub">AI coding assistant bridge for VS Code</p>
+    <h2>Request Free Access</h2>
+    <div class="msg ok" id="ok">✅ Request submitted! You will hear back within 24 hours.</div>
+    <div class="msg err" id="err"></div>
+    <form id="f">
+      <label>Your Name</label>
+      <input type="text" name="name" placeholder="John Doe" required />
       <label>Email Address</label>
-      <input type="email" name="email" placeholder="you@example.com" required>
-      <label>What do you want to build?</label>
-      <textarea name="reason" placeholder="Tell me what you're working on..." required></textarea>
-      <label>Preferred contact</label>
-      <select name="contactMethod">
-        <option value="email">Email</option>
-        <option value="x">X (Twitter)</option>
-        <option value="linkedin">LinkedIn</option>
-      </select>
-      <input type="text" name="contactHandle" placeholder="Your X handle or LinkedIn URL (optional)">
-      <button type="submit">Request Access →</button>
+      <input type="email" name="email" placeholder="you@example.com" required />
+      <label>What are you building?</label>
+      <textarea name="reason" placeholder="Briefly describe your project..."></textarea>
+      <button type="submit" id="btn">Submit Request</button>
     </form>
-    <div class="social">
-      <p>Or reach me directly:</p>
-      <div class="social-links">
-        <a href="https://x.com/success_o1" target="_blank">𝕏 @success_o1</a>
-        <a href="https://www.linkedin.com/in/success-o-1376b1344" target="_blank">in LinkedIn</a>
-      </div>
-    </div>
   </div>
   <script>
-    const form = document.getElementById('form');
-    const btn = form.querySelector('button');
-    const success = document.getElementById('success');
-
-    form.addEventListener('submit', async (e) => {
+    document.getElementById('f').addEventListener('submit', async e => {
       e.preventDefault();
-      btn.textContent = 'Sending...';
-      btn.disabled = true;
-      btn.style.opacity = '0.7';
-
+      const btn = document.getElementById('btn');
+      btn.textContent = 'Sending...'; btn.disabled = true;
+      const data = Object.fromEntries(new FormData(e.target));
       try {
-        const data = Object.fromEntries(new FormData(e.target));
-        const res = await fetch('/request', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
-        });
-
-        const result = await res.json();
-        if (res.ok && result.success) {
-          success.style.display = 'block';
-          form.style.display = 'none';
-        } else {
-          const errorMsg = result.error || 'Something went wrong. Please try again.';
-          btn.textContent = 'Request Access →';
-          btn.disabled = false;
-          btn.style.opacity = '1';
-          const errorDiv = document.getElementById('error-msg');
-          errorDiv.textContent = errorMsg;
-          errorDiv.style.display = 'block';
-        }
-      } catch (err) {
-        btn.textContent = 'Request Access →';
-        btn.disabled = false;
-        btn.style.opacity = '1';
-        alert('Something went wrong. Please try again.');
-      }
+        const r = await fetch('/api/request', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) });
+        const j = await r.json();
+        if (r.ok) { document.getElementById('f').style.display='none'; document.getElementById('ok').style.display='block'; }
+        else { const el=document.getElementById('err'); el.textContent=j.error; el.style.display='block'; btn.textContent='Submit Request'; btn.disabled=false; }
+      } catch { const el=document.getElementById('err'); el.textContent='Network error. Try again.'; el.style.display='block'; btn.textContent='Submit Request'; btn.disabled=false; }
     });
   </script>
 </body>
-</html>
-  `);
+</html>`);
 });
 
-// ── PUBLIC: Submit request ────────────────
-adminRouter.post('/request', async (req, res) => {
-  const { name, email, reason, contactMethod, contactHandle } = req.body;
 
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
-    res.status(400).json({ success: false, error: 'Please enter a valid email address' });
+// ── Submit request ─────────────────────────────────────────────────────────
+adminRouter.post('/api/request', async (req, res) => {
+  const { name, email, reason } = req.body;
+  if (!name || !email || !email.includes('@')) {
+    res.status(400).json({ error: 'Name and a valid email are required.' });
     return;
   }
 
-  const data = readData();
-
-  const alreadyExists = data.requests.some(
-    (r: any) => r.email === email && (r.status === 'pending' || r.status === 'approved')
-  );
-  if (alreadyExists) {
-    res.json({ success: true, duplicate: true });
+  // One active token per email — block duplicate requests
+  const existing = await sql`
+    SELECT status FROM fd_users
+    WHERE LOWER(email) = LOWER(${email}) AND status IN ('pending','approved')
+    LIMIT 1
+  `;
+  if (existing.length > 0) {
+    const s = existing[0].status;
+    res.status(400).json({
+      error: s === 'approved'
+        ? 'This email already has an active token. Check your approval email, or ask the admin to revoke it first.'
+        : 'A request from this email is already pending. Please wait for a response.'
+    });
     return;
   }
 
-  const request = {
-    id: crypto.randomUUID(),
-    name,
-    email,
-    reason,
-    contactMethod,
-    contactHandle,
-    status: 'pending',
-    createdAt: new Date().toISOString(),
-  };
-  data.requests.push(request);
-  writeData(data);
-  res.json({ success: true }); // respond immediately
+  await sql`INSERT INTO fd_users (name, email, reason) VALUES (${name}, ${email}, ${reason || ''})`;
+  res.json({ success: true });
 
-  // send email in background - do not await before responding
   try {
-    await sendEmail(
-      process.env.ADMIN_EMAIL!,
-      `🔔 New FlowDev access request from ${name}`,
-      `
-        <h2>New Access Request</h2>
-        <p><strong>Name:</strong> ${name}</p>
-        <p><strong>Email:</strong> ${email}</p>
-        <p><strong>Wants to build:</strong> ${reason}</p>
-        <p><strong>Contact:</strong> ${contactMethod} — ${contactHandle || 'not provided'}</p>
-        <br>
-        <a href="${process.env.PUBLIC_URL}/admin" style="background:#6366f1;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;">
-          Review in Admin Dashboard →
-        </a>
-      `
-    );
-  } catch (e: any) {
-    console.error('Admin notification email failed:', e.message);
-  }
+    await resend.emails.send({
+      from: 'onboarding@resend.dev',
+      to: ADMIN_EMAIL,
+      subject: `FlowDev: New request from ${name}`,
+      html: `<h2>New Access Request</h2><p><b>Name:</b> ${name}</p><p><b>Email:</b> ${email}</p><p><b>Reason:</b> ${reason || 'Not provided'}</p><p><a href="${PUBLIC_URL}/admin?key=${ADMIN_KEY}" style="background:#6366f1;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;margin-top:16px">Open Admin Dashboard</a></p>`
+    });
+  } catch (err: any) { console.error('Admin email failed:', err.message); }
 });
 
-// ── ADMIN: Dashboard ──────────────────────
-adminRouter.get('/admin', (req, res) => {
-  const adminKey = req.query.key;
-  if (adminKey !== process.env.ADMIN_KEY) {
-    res.status(401).send('<h2 style="font-family:sans-serif;color:red;padding:40px">❌ Unauthorized. Add ?key=YOUR_ADMIN_KEY to the URL</h2>');
-    return;
-  }
-  const data = readData();
-  const pendingRows = data.requests.filter((r: any) => r.status === 'pending').map((r: any) => `
+// ── Admin dashboard ────────────────────────────────────────────────────────
+adminRouter.get('/admin', async (req, res) => {
+  if (req.query.key !== ADMIN_KEY) { res.status(401).send('Unauthorized'); return; }
+  const users = await sql`SELECT * FROM fd_users ORDER BY requested_at DESC`;
+  const rows = users.map((u: any) => `
     <tr>
-      <td>${r.name}</td>
-      <td>${r.email}</td>
-      <td>${r.reason}</td>
-      <td>${r.contactMethod}: ${r.contactHandle || '-'}</td>
-      <td>${new Date(r.createdAt).toLocaleDateString()}</td>
+      <td>${u.name}</td><td>${u.email}</td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${u.reason||'-'}</td>
+      <td><span style="padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;background:${u.status==='approved'?'#14532d':u.status==='revoked'?'#3b1515':'#1c2a4a'};color:${u.status==='approved'?'#4ade80':u.status==='revoked'?'#f87171':'#60a5fa'}">${u.status}</span></td>
+      <td style="font-size:11px">${new Date(u.requested_at).toLocaleDateString()}</td>
       <td>
-        <button onclick="approve('${r.id}', this)" style="background:#16a34a;color:white;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;margin-right:6px">Approve</button>
-        <button onclick="deny('${r.id}', this)" style="background:#dc2626;color:white;border:none;padding:6px 12px;border-radius:6px;cursor:pointer">Deny</button>
+        ${u.status==='pending'?`<button onclick="go(${u.id},'approve')" style="background:#16a34a;color:white;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;margin-right:4px">Approve</button><button onclick="go(${u.id},'deny')" style="background:#dc2626;color:white;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px">Deny</button>`:u.status==='approved'?`<button onclick="go(${u.id},'revoke')" style="background:#7f1d1d;color:#fca5a5;border:1px solid #991b1b;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px">Revoke</button>`:'-'}
       </td>
-    </tr>
-  `).join('');
-
-  const approvedRows = data.users.map((u: any) => `
-    <tr>
-      <td>${u.name}</td>
-      <td>${u.email}</td>
-      <td><code style="background:#1a1a1a;padding:2px 6px;border-radius:4px;font-size:12px">${u.token.slice(0,16)}...</code></td>
-      <td>${new Date(u.approvedAt).toLocaleDateString()}</td>
-      <td><button onclick="revoke('${u.id}', this)" style="background:#7c3aed;color:white;border:none;padding:6px 12px;border-radius:6px;cursor:pointer">Revoke</button></td>
-    </tr>
-  `).join('');
-
-  res.send(`
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>FlowDev Admin</title>
-  <style>
-    * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#0a0a0a; color:#e5e5e5; padding:40px; }
-    h1 { font-size:24px; margin-bottom:4px; } h1 span { color:#6366f1; }
-    .sub { color:#666; font-size:14px; margin-bottom:32px; }
-    h2 { font-size:16px; color:#aaa; margin-bottom:16px; }
-    .section { background:#111; border:1px solid #222; border-radius:12px; padding:24px; margin-bottom:24px; }
-    table { width:100%; border-collapse:collapse; font-size:14px; }
-    th { text-align:left; color:#666; font-size:12px; font-weight:600; padding-bottom:12px; border-bottom:1px solid #1f1f1f; }
-    td { padding:12px 0; border-bottom:1px solid #1a1a1a; vertical-align:top; padding-right:16px; }
-    .empty { color:#444; font-style:italic; padding:16px 0; }
-    .stats { display:flex; gap:16px; margin-bottom:24px; }
-    .stat { background:#111; border:1px solid #222; border-radius:10px; padding:16px 24px; }
-    .stat-num { font-size:28px; font-weight:700; color:#6366f1; }
-    .stat-label { font-size:12px; color:#666; margin-top:2px; }
-  </style>
-</head>
-<body>
+    </tr>`).join('');
+  res.send(`<!DOCTYPE html><html><head><title>FlowDev Admin</title>
+  <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0d1117;color:#e6edf3;padding:32px}h1{font-size:22px;margin-bottom:4px}h1 span{color:#6366f1}.meta{color:#8b949e;font-size:13px;margin-bottom:32px}table{width:100%;border-collapse:collapse;background:#161b22;border:1px solid #30363d;border-radius:10px;overflow:hidden}th{background:#21262d;padding:10px 16px;text-align:left;font-size:12px;color:#8b949e;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #30363d}td{padding:12px 16px;border-bottom:1px solid #21262d;font-size:13px;vertical-align:middle}tr:last-child td{border-bottom:none}tr:hover td{background:#1c2128}</style>
+  </head><body>
   <h1>Flow<span>Dev</span> Admin</h1>
-  <p class="sub">Manage access requests and approved users</p>
-  <div class="stats">
-    <div class="stat"><div class="stat-num">${data.requests.filter((r:any)=>r.status==='pending').length}</div><div class="stat-label">Pending Requests</div></div>
-    <div class="stat"><div class="stat-num">${data.users.length}</div><div class="stat-label">Active Users</div></div>
-    <div class="stat"><div class="stat-num">${data.requests.filter((r:any)=>r.status==='denied').length}</div><div class="stat-label">Denied</div></div>
-  </div>
-  <div class="section">
-    <h2>⏳ Pending Requests</h2>
-    ${pendingRows ? `<table><tr><th>Name</th><th>Email</th><th>Wants to build</th><th>Contact</th><th>Date</th><th>Action</th></tr>${pendingRows}</table>` : '<p class="empty">No pending requests</p>'}
-  </div>
-  <div class="section">
-    <h2>✅ Approved Users</h2>
-    ${approvedRows ? `<table><tr><th>Name</th><th>Email</th><th>Token</th><th>Approved</th><th>Action</th></tr>${approvedRows}</table>` : '<p class="empty">No approved users yet</p>'}
-  </div>
+  <p class="meta">Total: ${users.length} | Approved: ${users.filter((u:any)=>u.status==='approved').length} | Pending: ${users.filter((u:any)=>u.status==='pending').length}</p>
+  <table><thead><tr><th>Name</th><th>Email</th><th>Reason</th><th>Status</th><th>Date</th><th>Action</th></tr></thead>
+  <tbody>${rows||'<tr><td colspan="6" style="text-align:center;color:#8b949e;padding:48px">No requests yet</td></tr>'}</tbody></table>
   <script>
-    const key = new URLSearchParams(location.search).get('key');
-
-    function setLoading(btn, text) {
-      btn.textContent = text;
-      btn.disabled = true;
-      btn.style.opacity = '0.6';
-    }
-
-    async function approve(id, btn) {
-      setLoading(btn, 'Approving...');
-      try {
-        const res = await fetch('/admin/approve/' + id + '?key=' + key, { method: 'POST' });
-        if (res.ok) {
-          location.reload();
-        } else {
-          alert('Approve failed. Check server logs.');
-          location.reload();
-        }
-      } catch (err) {
-        alert('Network error. Try again.');
-        location.reload();
-      }
-    }
-
-    async function deny(id, btn) {
-      setLoading(btn, 'Denying...');
-      try {
-        const res = await fetch('/admin/deny/' + id + '?key=' + key, { method: 'POST' });
-        if (res.ok) {
-          location.reload();
-        } else {
-          alert('Deny failed.');
-          location.reload();
-        }
-      } catch (err) {
-        alert('Network error. Try again.');
-        location.reload();
-      }
-    }
-
-    async function revoke(id, btn) {
-      if (!confirm('Revoke this user token? They will lose access immediately.')) return;
-      setLoading(btn, 'Revoking...');
-      try {
-        const res = await fetch('/admin/revoke/' + id + '?key=' + key, { method: 'POST' });
-        if (res.ok) {
-          location.reload();
-        } else {
-          alert('Revoke failed.');
-          location.reload();
-        }
-      } catch (err) {
-        alert('Network error. Try again.');
-        location.reload();
-      }
-    }
-  </script>
-</body>
-</html>
-  `);
+    async function go(id,type){const btn=event.target;btn.textContent='...';btn.disabled=true;const r=await fetch('/api/admin/'+type,{method:'POST',headers:{'Content-Type':'application/json','x-admin-key':'${ADMIN_KEY}'},body:JSON.stringify({id})});const j=await r.json();if(j.success){setTimeout(()=>location.reload(),400)}else{alert(j.error||'Error');btn.textContent=type;btn.disabled=false;}}
+  </script></body></html>`);
 });
 
-// ── ADMIN: Approve request ────────────────
-adminRouter.post('/admin/approve/:id', async (req, res) => {
-  if (req.query.key !== process.env.ADMIN_KEY) { res.status(401).json({ error: 'Unauthorized' }); return; }
-  const data = readData();
-  const request = data.requests.find((r: any) => r.id === req.params.id);
-  if (!request) { res.status(404).json({ error: 'Not found' }); return; }
-  request.status = 'approved';
-  const token = generateToken();
-  const user = {
-    id: crypto.randomUUID(),
-    requestId: request.id,
-    name: request.name,
-    email: request.email,
-    token,
-    approvedAt: new Date().toISOString(),
-    active: true,
-  };
-  data.users.push(user);
-  writeData(data);
-  res.json({ success: true, token });
 
-  // Email the user their token
+// ── Approve ────────────────────────────────────────────────────────────────
+adminRouter.post('/api/admin/approve', async (req, res) => {
+  if (req.headers['x-admin-key'] !== ADMIN_KEY) { res.status(401).json({ error: 'Unauthorized' }); return; }
+  const token = crypto.randomBytes(32).toString('hex');
+  const rows = await sql`
+    UPDATE fd_users SET status='approved', token=${token}, approved_at=NOW()
+    WHERE id=${req.body.id} AND status='pending'
+    RETURNING name, email
+  `;
+  if (rows.length === 0) { res.status(404).json({ error: 'Not found or already processed' }); return; }
+  approvedTokens.add(token);
+  const { name, email } = rows[0];
+  const mcpUrl = `${PUBLIC_URL}/mcp?token=${token}`;
+  res.json({ success: true });
   try {
-    console.log('Sending approval email to:', request.email, 'via SMTP user:', process.env.SMTP_USER);
-    await sendEmail(
-      request.email,
-      '✅ Your FlowDev access is approved!',
-      `
-<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">
-  <h2 style="color:#111">Welcome to FlowDev, ${request.name}!</h2>
-  <p style="color:#444">Your access has been approved. Here is everything you need to get connected.</p>
-  
-  <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
-  
-  <h3 style="color:#111">Step 1 — Install the VS Code Extension</h3>
-  <p style="color:#444">Open VS Code, go to Extensions, search <strong>FlowDev MCP</strong> and install it.</p>
-  <p style="color:#444">Or install directly from: <a href="https://marketplace.visualstudio.com/items?itemName=successo.flowdevmcp">VS Code Marketplace</a></p>
-
-  <h3 style="color:#111;margin-top:24px">Step 2 — Enter Your Token in VS Code</h3>
-  <p style="color:#444">Click the FlowDev icon in the bottom-left status bar and select <strong>Enter Token</strong>. Paste your token below:</p>
-  <code style="background:#f3f4f6;padding:12px 16px;display:block;border-radius:8px;margin:12px 0;font-size:13px;word-break:break-all;color:#111">${token}</code>
-
-  <h3 style="color:#111;margin-top:24px">Step 3 — Add the MCP Connector in Your AI App</h3>
-  <p style="color:#444">In Claude.ai go to Settings then Connectors then Add Custom Connector and paste this URL:</p>
-  <code style="background:#f3f4f6;padding:12px 16px;display:block;border-radius:8px;margin:12px 0;font-size:13px;word-break:break-all;color:#111">https://flowdev.onrender.com/mcp?token=${token}</code>
-  <p style="color:#666;font-size:13px">Works with any MCP-compatible AI: Claude, Grok, GPT-4, Gemini and more.</p>
-
-  <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
-
-  <p style="color:#888;font-size:13px">Keep your token private. Need help? Reach out on <a href="https://x.com/success_o1">X @success_o1</a></p>
-</div>
-`
-    );
-    console.log('Approval email sent successfully to:', request.email);
-  } catch (e: any) {
-    console.error('Approval email failed:', e.message);
-  }
+    await resend.emails.send({
+      from: 'onboarding@resend.dev', to: email,
+      subject: 'Your FlowDev access is approved ✅',
+      html: `<h2>Welcome to FlowDev, ${name}! 🚀</h2>
+      <p>Your access has been approved.</p>
+      <h3 style="margin-top:24px">Your MCP Connector URL</h3>
+      <code style="background:#1a1a2e;color:#60a5fa;padding:12px;display:block;border-radius:6px;word-break:break-all;margin:8px 0">${mcpUrl}</code>
+      <h3 style="margin-top:24px">Setup (3 steps)</h3>
+      <ol style="margin-left:20px;line-height:2.2">
+        <li>Install the VS Code extension: <a href="https://marketplace.visualstudio.com/items?itemName=successO.flowdevmcp">FlowDev MCP on Marketplace</a></li>
+        <li>Open the FlowDev sidebar in VS Code → paste your token → click Connect</li>
+        <li>In Claude.ai → Settings → Connectors → Add Custom Connector → paste the URL above → choose <b>"No sign-in"</b> → click Add → Connect</li>
+      </ol>
+      <p style="margin-top:16px;color:#888">Keep your token private. It's tied to your email only.</p>`
+    });
+  } catch (err: any) { console.error('Approval email failed:', err.message); }
 });
 
-// ── ADMIN: Deny request ───────────────────
-adminRouter.post('/admin/deny/:id', (req, res) => {
-  if (req.query.key !== process.env.ADMIN_KEY) { res.status(401).json({ error: 'Unauthorized' }); return; }
-  const data = readData();
-  const request = data.requests.find((r: any) => r.id === req.params.id);
-  if (request) request.status = 'denied';
-  writeData(data);
+// ── Deny ───────────────────────────────────────────────────────────────────
+adminRouter.post('/api/admin/deny', async (req, res) => {
+  if (req.headers['x-admin-key'] !== ADMIN_KEY) { res.status(401).json({ error: 'Unauthorized' }); return; }
+  await sql`UPDATE fd_users SET status='revoked' WHERE id=${req.body.id} AND status='pending'`;
   res.json({ success: true });
 });
 
-// ── ADMIN: Revoke user ────────────────────
-adminRouter.post('/admin/revoke/:id', (req, res) => {
-  if (req.query.key !== process.env.ADMIN_KEY) { res.status(401).json({ error: 'Unauthorized' }); return; }
-  const data = readData();
-  const user = data.users.find((u: any) => u.id === req.params.id);
-  if (user) user.active = false;
-  writeData(data);
+// ── Revoke ─────────────────────────────────────────────────────────────────
+adminRouter.post('/api/admin/revoke', async (req, res) => {
+  if (req.headers['x-admin-key'] !== ADMIN_KEY) { res.status(401).json({ error: 'Unauthorized' }); return; }
+  const rows = await sql`
+    UPDATE fd_users SET status='revoked', token=NULL
+    WHERE id=${req.body.id} AND status='approved'
+    RETURNING token
+  `;
+  if (rows.length > 0 && rows[0].token) approvedTokens.delete(rows[0].token);
   res.json({ success: true });
 });
-
-// ── Token validation export ───────────────
-export function validateToken(token: string): boolean {
-  try {
-    const data = readData();
-    return data.users.some((u: any) => u.token === token && u.active === true);
-  } catch {
-    return false;
-  }
-}

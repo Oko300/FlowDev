@@ -6,7 +6,7 @@ import { Server as SocketServer } from "socket.io";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
-import { adminRouter, validateToken } from './admin';
+import { adminRouter, validateToken, initDB } from './admin';
 dotenv.config();
 
 const app = express();
@@ -517,11 +517,16 @@ app.get("/", (_req, res) => {
 // ─────────────────────────────────────────
 // START
 // ─────────────────────────────────────────
-httpServer.listen(PORT, () => {
-  console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-  console.log(`  🚀  FlowDev Server is running`);
-  console.log(`  🌐  http://localhost:${PORT}`);
-  console.log(`  📡  MCP: http://localhost:${PORT}/mcp?token=YOUR_TOKEN`);
-  console.log(`  🔧  Tools: 16 tools available`);
-  console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+initDB().then(() => {
+  httpServer.listen(PORT, () => {
+    console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`  🚀  FlowDev Server is running`);
+    console.log(`  🌐  http://localhost:${PORT}`);
+    console.log(`  📡  MCP: http://localhost:${PORT}/mcp?token=YOUR_TOKEN`);
+    console.log(`  🔧  Tools: 16 tools available`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+  });
+}).catch(err => {
+  console.error('❌ Failed to initialize database:', err.message);
+  process.exit(1);
 });
