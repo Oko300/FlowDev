@@ -45,6 +45,7 @@ adminRouter.get('/request', (_req, res) => {
 <head>
   <title>Request FlowDev Access</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><polygon points='14,2 7,13 11.5,13 9.5,22 17,11 12,11' fill='%236366f1'/></svg>">
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
@@ -79,6 +80,12 @@ adminRouter.get('/request', (_req, res) => {
       <textarea name="reason" placeholder="Briefly describe your project..."></textarea>
       <button type="submit" id="btn">Submit Request</button>
     </form>
+  </div>
+  <div style="text-align:center;margin-top:20px;padding-bottom:8px">
+    <p style="color:#484f58;font-size:12px;margin-bottom:8px">Built by <strong style="color:#8b949e">@success_o1</strong></p>
+    <a href="https://x.com/success_o1" target="_blank" style="color:#6366f1;font-size:12px;text-decoration:none;margin-right:16px">𝕏 Twitter</a>
+    <a href="https://www.linkedin.com/in/success-o-1376b1344" target="_blank" style="color:#6366f1;font-size:12px;text-decoration:none;margin-right:16px">LinkedIn</a>
+    <a href="https://github.com/Oko300/FlowDev" target="_blank" style="color:#6366f1;font-size:12px;text-decoration:none">GitHub</a>
   </div>
   <script>
     document.getElementById('f').addEventListener('submit', async e => {
