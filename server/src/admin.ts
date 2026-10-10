@@ -1,10 +1,18 @@
 import express from 'express';
 import crypto from 'crypto';
 import { neon } from '@neondatabase/serverless';
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 
 const sql = neon(process.env.DATABASE_URL!);
-const resend = new Resend(process.env.RESEND_API_KEY);
+const transporter = nodemailer.createTransport({
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.EMAIL_PASSWORD,
+  },
+});
 const ADMIN_KEY = process.env.ADMIN_KEY || 'flowdev-admin-2024-secret';
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'spidy9058@gmail.com';
 const PUBLIC_URL = process.env.PUBLIC_URL || 'https://flowdev.onrender.com';
@@ -134,8 +142,8 @@ adminRouter.post('/api/request', async (req, res) => {
   res.json({ success: true });
 
   try {
-    await resend.emails.send({
-      from: 'onboarding@resend.dev',
+    await transporter.sendMail({
+      from: `"FlowDev" <${process.env.SMTP_USER}>`,
       to: ADMIN_EMAIL,
       subject: `FlowDev: New request from ${name}`,
       html: `<h2>New Access Request</h2><p><b>Name:</b> ${name}</p><p><b>Email:</b> ${email}</p><p><b>Reason:</b> ${reason || 'Not provided'}</p><p><a href="${PUBLIC_URL}/admin?key=${ADMIN_KEY}" style="background:#6366f1;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;margin-top:16px">Open Admin Dashboard</a></p>`
@@ -186,8 +194,9 @@ adminRouter.post('/api/admin/approve', async (req, res) => {
   // Send email before responding so failures surface to admin
   let emailErr = null;
   try {
-    const result = await resend.emails.send({
-      from: 'onboarding@resend.dev', to: email,
+    const result = await transporter.sendMail({
+      from: `"FlowDev" <${process.env.SMTP_USER}>`,
+      to: email,
       subject: 'Your FlowDev access is approved ✅',
       html: `
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:520px;margin:0 auto;padding:40px">
