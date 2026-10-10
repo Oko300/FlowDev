@@ -80,12 +80,12 @@ adminRouter.get('/request', (_req, res) => {
       <textarea name="reason" placeholder="Briefly describe your project..."></textarea>
       <button type="submit" id="btn">Submit Request</button>
     </form>
-  </div>
-  <div style="text-align:center;margin-top:20px;padding-bottom:8px">
-    <p style="color:#484f58;font-size:12px;margin-bottom:8px">Built by <strong style="color:#8b949e">@success_o1</strong></p>
-    <a href="https://x.com/success_o1" target="_blank" style="color:#6366f1;font-size:12px;text-decoration:none;margin-right:16px">𝕏 Twitter</a>
-    <a href="https://www.linkedin.com/in/success-o-1376b1344" target="_blank" style="color:#6366f1;font-size:12px;text-decoration:none;margin-right:16px">LinkedIn</a>
+  <hr style="border:none;border-top:1px solid #21262d;margin:24px 0 16px">
+  <div style="display:flex;justify-content:center;gap:20px;align-items:center">
+    <a href="https://x.com/success_o1" target="_blank" style="color:#6366f1;font-size:12px;text-decoration:none">𝕏 Twitter</a>
+    <a href="https://www.linkedin.com/in/success-o-1376b1344" target="_blank" style="color:#6366f1;font-size:12px;text-decoration:none">LinkedIn</a>
     <a href="https://github.com/Oko300/FlowDev" target="_blank" style="color:#6366f1;font-size:12px;text-decoration:none">GitHub</a>
+  </div>
   </div>
   <script>
     document.getElementById('f').addEventListener('submit', async e => {
