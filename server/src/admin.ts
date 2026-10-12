@@ -1,18 +1,28 @@
 import express from 'express';
 import crypto from 'crypto';
 import { neon } from '@neondatabase/serverless';
-import nodemailer from 'nodemailer';
+// Email via Brevo HTTPS API — works on Render free tier (no SMTP blocking)
 
 const sql = neon(process.env.DATABASE_URL!);
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.EMAIL_PASSWORD,
-  },
-});
+async function sendEmail(to: string, subject: string, html: string): Promise<void> {
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': process.env.BREVO_API_KEY || '',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      sender: { name: 'FlowDev', email: process.env.SMTP_USER },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(JSON.stringify(err));
+  }
+}
 const ADMIN_KEY = process.env.ADMIN_KEY || 'flowdev-admin-2024-secret';
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'spidy9058@gmail.com';
 const PUBLIC_URL = process.env.PUBLIC_URL || 'https://flowdev.onrender.com';
@@ -142,12 +152,7 @@ adminRouter.post('/api/request', async (req, res) => {
   res.json({ success: true });
 
   try {
-    await transporter.sendMail({
-      from: `"FlowDev" <${process.env.SMTP_USER}>`,
-      to: ADMIN_EMAIL,
-      subject: `FlowDev: New request from ${name}`,
-      html: `<h2>New Access Request</h2><p><b>Name:</b> ${name}</p><p><b>Email:</b> ${email}</p><p><b>Reason:</b> ${reason || 'Not provided'}</p><p><a href="${PUBLIC_URL}/admin?key=${ADMIN_KEY}" style="background:#6366f1;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;margin-top:16px">Open Admin Dashboard</a></p>`
-    });
+    await sendEmail(ADMIN_EMAIL, `FlowDev: New request from ${name}`, `<h2>New Access Request</h2><p><b>Name:</b> ${name}</p><p><b>Email:</b> ${email}</p><p><b>Reason:</b> ${reason || 'Not provided'}</p><p><a href="${PUBLIC_URL}/admin?key=${ADMIN_KEY}" style="background:#6366f1;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;margin-top:16px">Open Admin Dashboard</a></p>`)
   } catch (err: any) { console.error('Admin email failed:', err.message); }
 });
 
@@ -194,11 +199,7 @@ adminRouter.post('/api/admin/approve', async (req, res) => {
   // Send email before responding so failures surface to admin
   let emailErr = null;
   try {
-    const result = await transporter.sendMail({
-      from: `"FlowDev" <${process.env.SMTP_USER}>`,
-      to: email,
-      subject: 'Your FlowDev access is approved ✅',
-      html: `
+    const result = await sendEmail(email, 'Your FlowDev access is approved ✅', `
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:520px;margin:0 auto;padding:40px">
       <h2 style="margin:0 0 4px 0;font-size:22px;font-weight:700">Welcome to FlowDev, ${name}! <span style="color:#6366f1">⚡</span></h2>
       <p style="color:#666;margin:0 0 32px 0;font-size:14px">Your access has been approved. Three steps and you are live.</p>
@@ -220,12 +221,7 @@ adminRouter.post('/api/admin/approve', async (req, res) => {
       <hr style="border:none;border-top:1px solid #eee;margin:32px 0">
       <p style="color:#aaa;font-size:12px;margin:0">Need help? <a href="https://x.com/success_o1" style="color:#6366f1">@success_o1 on X</a> · <a href="https://github.com/Oko300/FlowDev" style="color:#6366f1">GitHub</a></p>
     </div>
-  `
-    });
-    if (result.error) {
-      emailErr = JSON.stringify(result.error);
-      console.error('Resend error:', emailErr);
-    }
+  `)
   } catch (err) {
     emailErr = err.message + ' | ' + JSON.stringify(err);
     console.error('Approval email exception:', emailErr);
