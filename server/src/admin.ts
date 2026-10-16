@@ -266,7 +266,7 @@ adminRouter.get('/admin', (req, res) => {
         '',
         '— FlowDev'
       ];
-      return lines.join('\n');
+      return lines.join('\\n');
     }
 
     async function doAction(id, type, btn) {
