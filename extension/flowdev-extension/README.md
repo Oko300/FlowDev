@@ -1,172 +1,142 @@
-# FlowDev - Your AI Works Inside VS Code Now
+# FlowDev MCP
 
-Stop switching tabs. Stop copy-pasting code. FlowDev connects any MCP-compatible AI directly to your VS Code workspace. Your AI reads your files, writes code, runs terminal commands, and pushes to GitHub without you leaving your editor.
+**Connect any MCP-compatible AI directly to your VS Code workspace.**
 
-Works with Claude, Grok, GPT-4, Gemini, and any other AI that supports the Model Context Protocol (MCP).
+Stop copy-pasting code between your AI and your editor. FlowDev lets your AI read files, write code, search your codebase, run terminal commands, and push to GitHub — all from the chat window.
+
+Works with **Claude, Cursor, Windsurf, Cline, Continue** and any AI that supports the Model Context Protocol (MCP).
 
 ---
 
 ## How It Works
 
 ```
-You chat with your AI (browser or app)
-         |
-FlowDev Cloud Relay (flowdev.onrender.com)
-         |
-FlowDev Extension (installed in your VS Code)
-         |
+You chat with your AI  (browser or app)
+           ↓
+FlowDev Cloud Relay  (flowdev.onrender.com)
+           ↓
+FlowDev Extension  (installed in your VS Code)
+           ↓
 Your local files, terminal, and GitHub
 ```
 
-Your AI sends instructions through the relay. The extension runs them on your machine. Your code never gets stored anywhere. The relay is just a bridge.
-
----
-
-## Features
-
-### File Operations
-Your AI reads any file in your project and writes changes straight to disk. Tell it to read a file and refactor a function. It opens the file, understands it, rewrites it, and saves it. No clipboard needed.
-
-### Terminal Commands
-Your AI runs any command in your project terminal. npm install, build scripts, test runners, migration commands. Results come back to the AI in real time so it can fix issues automatically.
-
-### Built-in Code Analyzer
-Every file write gets scanned before saving. The analyzer catches:
-- Hardcoded API keys and passwords
-- HTTP used instead of HTTPS
-- Dangerous eval() calls
-- Missing error handling on async functions
-- console.log left in production code
-
-Your AI sees the warnings and fixes them before the file lands on disk.
-
-### Git Integration
-Your AI checks git status, stages files, commits with a message, and pushes to GitHub without you touching the terminal.
-
-### Project Awareness
-Your AI scans your entire folder tree and understands your project structure before touching anything. It knows where files live and how things connect.
-
-### Auto-Reconnect
-If the connection drops, the extension reconnects on its own. No manual action needed.
+Your AI sends instructions through the relay. The extension executes them on your machine. Your code never gets stored anywhere — the relay is just a bridge.
 
 ---
 
 ## Getting Started
 
-### Step 1 - Request Access
+### Step 1 — Request Access
 
-FlowDev uses approved access to keep quality high.
+FlowDev uses approved access to keep quality high and abuse out.
 
-Request access here: https://flowdev.onrender.com/request
+**Request your free token here:** https://flowdev.onrender.com/request
 
-Fill in your name, email, and what you are building. The owner reviews requests and approves within 24 hours. You get your personal access token by email.
+Fill in your name, email, and what you are building. You will get a personal token by email within 24 hours.
 
-### Step 2 - Enter Your Token
+### Step 2 — Paste Your Token in VS Code
 
-After installing, look at the bottom-left status bar in VS Code. Click the FlowDev icon and choose Enter Token. Paste the token from your email.
+Click the **FlowDev ⚡ icon** in the Activity Bar on the left side of VS Code. Paste your token in the input and click **Connect**.
 
-Your token is stored using VS Code encrypted secret storage. It is not saved in any settings file or plain text.
+Once connected, the sidebar shows your personal **MCP URL**. Copy it — you will need it in Step 3.
 
-### Step 3 - Add the MCP Connector
+### Step 3 — Add the MCP Connector in Your AI
 
-In your AI app (Claude, Grok, or any MCP-compatible client):
+**For Claude.ai:**
+1. Go to **Settings → Connectors → Add Custom Connector**
+2. Paste your MCP URL
+3. Select **"No sign-in"**
+4. Click Add, then Connect
 
-1. Find the connectors or tools settings
-2. Add a custom MCP connector
-3. Use this URL with your token: https://flowdev.onrender.com/mcp?token=YOUR_TOKEN
+**For Cursor / Windsurf / Cline / Continue:**
+Add the MCP URL as a custom MCP server in your AI's settings.
 
-For Claude.ai specifically:
-1. Go to Settings then Connectors then Add Custom Connector
-2. Paste the URL above
-3. Enable it inside any chat using the tools icon near the message input
+### Step 4 — Start Building
 
-### Step 4 - Start Building
+Make sure the status bar shows **FlowDev: Connected**, then tell your AI what to do:
 
-Make sure the status bar shows FlowDev Connected, then go to your AI and start:
+> "Read my package.json and tell me what packages are outdated"
 
-"Read my package.json and tell me what is outdated"
+> "Search my project for all uses of useEffect"
 
-"Add rate limiting to my Express server with proper error handling"
+> "Add rate limiting to my Express server with proper error handling"
 
-"Run the tests and fix whatever is failing"
+> "Commit everything and push to main"
 
-"Commit everything we did today and push to main"
+---
+
+## Tools Available (16 total)
+
+| Category | Tools |
+|---|---|
+| **Files** | `read_file` · `write_file` · `find_and_replace` · `delete_file` · `rename_file` · `create_directory` |
+| **Search** | `search_in_files` — grep across your entire codebase |
+| **Terminal** | `run_command` — run any shell command |
+| **Navigation** | `list_directory` · `get_project_structure` |
+| **Git** | `git_status` · `git_diff` · `git_add` · `git_commit` · `git_push` |
+| **Status** | `ping` — confirm connection |
 
 ---
 
 ## Status Bar
 
-The FlowDev item in the bottom-left VS Code status bar shows what is happening:
+The FlowDev item in the bottom-left VS Code status bar shows the current state:
 
-Connected means your AI can access your workspace.
-Connecting means it is establishing the connection.
-Token required means you need to enter your access token first.
-Connection failed means check your token or internet.
+| Status | Meaning |
+|---|---|
+| `⚡ FlowDev: Connected` | Your AI can access your workspace |
+| `⟳ FlowDev: Connecting...` | Establishing connection |
+| `⟳ FlowDev: Waking server...` | Server is starting up (takes ~30s on first connect) |
+| `⟳ FlowDev: Reconnecting...` | Lost connection, retrying automatically |
+| `🔑 FlowDev: Setup Required` | Paste your token to connect |
 
-Click the status bar icon to disconnect, change your token, or get access.
+The extension reconnects automatically on VS Code restart, window reload, and PC restart. No manual action needed.
 
 ---
 
 ## Commands
 
-Open the Command Palette (Ctrl+Shift+P) and search:
+Open the Command Palette (`Ctrl+Shift+P`) and search:
 
-FlowDev: Connect to Server
-FlowDev: Disconnect from Server
-FlowDev: Set Access Token
-FlowDev: Show Status
-
----
-
-## Supported AI Clients
-
-FlowDev works with any AI that supports MCP (Model Context Protocol):
-
-- Claude (claude.ai)
-- Grok
-- GPT-4 with MCP support
-- Gemini with MCP support
-- Any other MCP-compatible AI client
+- `FlowDev: Connect to Server`
+- `FlowDev: Disconnect from Server`
+- `FlowDev: Set Access Token`
+- `FlowDev: Show Status`
 
 ---
 
 ## Security
 
-Your token is unique to you. No two users share one. The relay routes commands only to the extension connected with your token.
-
-Your token is stored using VS Code SecretStorage, the same method VS Code uses for passwords. It is not in settings.json or any readable file.
-
-The FlowDev relay server does not read, store, or log your code. It only forwards tool calls and results.
-
-All file reads, writes, and commands run on your own machine through the extension. Nothing runs in the cloud.
-
-Every user is reviewed and approved manually before getting a token.
+- Your token is unique to you — no two users share one
+- Tokens are stored using VS Code **SecretStorage** (the same method VS Code uses for passwords), not in settings.json
+- The relay server does not read, store, or log your code — it only forwards tool calls and results
+- All file reads, writes, and commands run on your own machine
+- Every user is reviewed and approved manually before getting a token
 
 ---
 
 ## Troubleshooting
 
-Status bar shows Connection failed: Check your internet. Try FlowDev: Set Access Token and re-enter your token.
+**Status bar shows "Waking server..."**
+The server is starting up. Wait up to 30 seconds — it connects automatically.
 
-AI says no tools available: Make sure you enabled the FlowDev connector in that chat session.
+**Status bar shows "Reconnecting..."**
+Lost connection. The extension retries automatically. If it stays for more than a minute, check your internet.
 
-Extension connected but AI cannot read files: Make sure you have a folder open in VS Code, not just a single file.
+**AI says no tools available**
+Make sure you enabled the FlowDev connector inside that chat session (the connector must be toggled on per chat in Claude.ai).
 
-Token not working after approval email: Copy the token exactly as it appears. Use FlowDev: Set Access Token to re-enter it.
+**Extension connected but AI cannot read files**
+Make sure you have a folder open in VS Code (File → Open Folder), not just a single file.
 
----
-
-## Get Access
-
-Access is free and request-based.
-
-Request your token here: https://flowdev.onrender.com/request
+**Token not working after approval email**
+Copy the token exactly as shown. Use the FlowDev sidebar to clear and re-enter it.
 
 ---
 
 ## Links
 
-Website: https://flowdev.onrender.com
-GitHub: https://github.com/Oko300/FlowDev
-X: https://x.com/success_o1
-LinkedIn: https://www.linkedin.com/in/success-o-1376b1344
+- **Request access:** https://flowdev.onrender.com/request
+- **GitHub:** https://github.com/Oko300/FlowDev
+- **X (Twitter):** https://x.com/success_o1
+- **LinkedIn:** https://www.linkedin.com/in/success-o-1376b1344

@@ -291,43 +291,92 @@ adminRouter.get('/admin', async (req, res) => {
         tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#8b949e;padding:48px">No requests yet</td></tr>';
         return;
       }
-      users.forEach(u => {
-        // Main row
-        const tr = document.createElement('tr');
-        const badgeClass = 'badge badge-' + (u.status === 'approved' ? 'approved' : u.status === 'revoked' ? 'revoked' : 'pending');
 
-        let actionHTML = '-';
+      users.forEach(function(u) {
+        // ── Main data row ──────────────────────────────────────────────────
+        const tr = document.createElement('tr');
+        const badge = 'badge badge-' + (u.status === 'approved' ? 'approved' : u.status === 'revoked' ? 'revoked' : 'pending');
+
+        // Email cell — copy button uses data-val, no inline string quoting
+        const emailCell = document.createElement('td');
+        emailCell.innerHTML = '<span>' + u.email + '</span>';
+        const copyEmailBtn = document.createElement('button');
+        copyEmailBtn.className = 'btn-copy';
+        copyEmailBtn.textContent = 'Copy';
+        copyEmailBtn.dataset.val = u.email;
+        copyEmailBtn.onclick = function() { cp(this.dataset.val, this); };
+        emailCell.appendChild(copyEmailBtn);
+
+        // Action cell — buttons carry id + type as data attrs
+        const actionCell = document.createElement('td');
+        actionCell.style.whiteSpace = 'nowrap';
         if (u.status === 'pending') {
-          actionHTML = '<button class="btn btn-green" onclick="go(' + u.id + ',\'approve\',this)" style="margin-right:4px">Approve</button>' +
-                       '<button class="btn btn-red" onclick="go(' + u.id + ',\'deny\',this)">Deny</button>';
+          ['approve','deny'].forEach(function(type) {
+            const btn = document.createElement('button');
+            btn.className = 'btn ' + (type === 'approve' ? 'btn-green' : 'btn-red');
+            btn.textContent = type.charAt(0).toUpperCase() + type.slice(1);
+            btn.dataset.id   = u.id;
+            btn.dataset.type = type;
+            if (type === 'approve') btn.style.marginRight = '4px';
+            btn.onclick = function() { go(parseInt(this.dataset.id), this.dataset.type, this); };
+            actionCell.appendChild(btn);
+          });
         } else if (u.status === 'approved') {
-          actionHTML = '<button class="btn btn-revoke" onclick="go(' + u.id + ',\'revoke\',this)">Revoke</button>';
+          const btn = document.createElement('button');
+          btn.className = 'btn btn-revoke';
+          btn.textContent = 'Revoke';
+          btn.dataset.id   = u.id;
+          btn.dataset.type = 'revoke';
+          btn.onclick = function() { go(parseInt(this.dataset.id), this.dataset.type, this); };
+          actionCell.appendChild(btn);
+        } else {
+          actionCell.textContent = '-';
         }
 
         tr.innerHTML =
           '<td style="font-weight:500">' + u.name + '</td>' +
-          '<td>' + u.email + ' <button class="btn-copy" onclick="cp(\'' + u.email + '\',this)">Copy</button></td>' +
+          '<td></td>' +
           '<td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#8b949e">' + (u.reason || '-') + '</td>' +
-          '<td><span class="' + badgeClass + '">' + u.status + '</span></td>' +
+          '<td><span class="' + badge + '">' + u.status + '</span></td>' +
           '<td style="color:#8b949e;font-size:11px">' + u.requested_at + '</td>' +
-          '<td>' + actionHTML + '</td>';
+          '<td></td>';
+
+        // Replace the placeholder <td></td> cells with our DOM nodes
+        tr.cells[1].appendChild(emailCell.childNodes[0].cloneNode()); // span
+        tr.cells[1].innerHTML = '';
+        tr.cells[1].appendChild(emailCell);
+        tr.cells[5].appendChild(actionCell);
         tbody.appendChild(tr);
 
-        // Message row for approved users only
+        // ── Message row for approved users ────────────────────────────────
         if (u.status === 'approved' && u.token) {
           const msg = buildMessage(u);
           const msgTr = document.createElement('tr');
           msgTr.className = 'msg-row';
           const msgTd = document.createElement('td');
           msgTd.colSpan = 6;
-          msgTd.innerHTML =
-            '<div class="msg-header">' +
-              '<span class="msg-label">📋 Send this message to ' + u.email + ' manually</span>' +
-              '<button class="btn-copy-msg" onclick="cp(this.dataset.msg,this)" data-msg="">Copy Message</button>' +
-            '</div>' +
-            '<div class="msg-box">' + msg.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>';
-          // Set msg on button via dataset to avoid quote escaping
-          msgTd.querySelector('.btn-copy-msg').dataset.msg = msg;
+
+          const header = document.createElement('div');
+          header.className = 'msg-header';
+
+          const label = document.createElement('span');
+          label.className = 'msg-label';
+          label.textContent = '📋 Copy and send to ' + u.email + ' manually';
+
+          const copyMsgBtn = document.createElement('button');
+          copyMsgBtn.className = 'btn-copy-msg';
+          copyMsgBtn.textContent = 'Copy Message';
+          copyMsgBtn.dataset.msg = msg;
+          copyMsgBtn.onclick = function() { cp(this.dataset.msg, this); };
+
+          const box = document.createElement('div');
+          box.className = 'msg-box';
+          box.textContent = msg;  // textContent = safe, no XSS, no escaping needed
+
+          header.appendChild(label);
+          header.appendChild(copyMsgBtn);
+          msgTd.appendChild(header);
+          msgTd.appendChild(box);
           msgTr.appendChild(msgTd);
           tbody.appendChild(msgTr);
         }
