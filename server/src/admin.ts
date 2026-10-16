@@ -189,8 +189,12 @@ adminRouter.get('/admin', (req, res) => {
     .btn-deny{background:#dc2626;color:#fff}
     .btn-revoke{background:#7f1d1d;color:#fca5a5;border:1px solid #991b1b}
     .btn-copy{background:none;border:1px solid #30363d;color:#8b949e;padding:2px 8px;font-size:11px;border-radius:4px;cursor:pointer;margin-left:6px}
-    .btn-msg{background:#6366f1;color:#fff;padding:5px 14px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;border:none}
+    .btn-msg{background:#6366f1;color:#fff;padding:5px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;border:none;margin-right:4px}
+    .btn-delete{background:#3b1515;color:#fca5a5;border:1px solid #7f1d1d;padding:5px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;margin-right:4px}
+    .btn-delete:hover{background:#5c1a1a}
     .msg-row td{padding:0 16px 14px 16px}
+    .msg-row{display:none}
+    .msg-row.open{display:table-row}
     .msg-box{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:14px;margin-top:6px;font-size:12px;color:#c9d1d9;white-space:pre-wrap;line-height:1.7;word-break:break-all;font-family:monospace}
     .msg-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
     .msg-label{font-size:11px;font-weight:600;color:#6366f1;text-transform:uppercase;letter-spacing:.5px}
@@ -281,7 +285,8 @@ adminRouter.get('/admin', (req, res) => {
         });
         var j = await r.json();
         if (j.success) {
-          showToast(type === 'approve' ? 'Approved!' : type === 'deny' ? 'Denied' : 'Revoked');
+          var toasts = { approve: 'Approved!', deny: 'Denied', revoke: 'Revoked', delete: 'Deleted' };
+          showToast(toasts[type] || 'Done');
           setTimeout(function() { loadUsers(); }, 500);
         } else {
           alert(j.error || 'Something went wrong');
@@ -350,13 +355,49 @@ adminRouter.get('/admin', (req, res) => {
           tdAction.appendChild(btn);
         });
       } else if (u.status === 'approved') {
-        var btn = document.createElement('button');
-        btn.className = 'btn btn-revoke';
-        btn.textContent = 'Revoke';
+        var revBtn = document.createElement('button');
+        revBtn.className = 'btn btn-revoke';
+        revBtn.textContent = 'Revoke';
         (function(id, b) {
           b.addEventListener('click', function() { doAction(id, 'revoke', b); });
-        })(u.id, btn);
-        tdAction.appendChild(btn);
+        })(u.id, revBtn);
+        tdAction.appendChild(revBtn);
+
+        var msgBtn = document.createElement('button');
+        msgBtn.className = 'btn btn-msg';
+        msgBtn.textContent = 'Message \u25BE';
+        msgBtn.setAttribute('data-msg-id', 'msg-' + u.id);
+        (function(btn) {
+          btn.addEventListener('click', function() {
+            var row = document.getElementById(btn.getAttribute('data-msg-id'));
+            if (!row) return;
+            var open = row.classList.toggle('open');
+            btn.textContent = open ? 'Message \u25B4' : 'Message \u25BE';
+          });
+        })(msgBtn);
+        tdAction.appendChild(msgBtn);
+
+        var delBtn = document.createElement('button');
+        delBtn.className = 'btn btn-delete';
+        delBtn.textContent = 'Delete';
+        (function(id, b) {
+          b.addEventListener('click', function() {
+            if (!confirm('Permanently delete this approved user and invalidate their token?')) return;
+            doAction(id, 'delete', b);
+          });
+        })(u.id, delBtn);
+        tdAction.appendChild(delBtn);
+      } else if (u.status === 'revoked') {
+        var delBtn = document.createElement('button');
+        delBtn.className = 'btn btn-delete';
+        delBtn.textContent = 'Delete';
+        (function(id, b) {
+          b.addEventListener('click', function() {
+            if (!confirm('Permanently delete this revoked entry?')) return;
+            doAction(id, 'delete', b);
+          });
+        })(u.id, delBtn);
+        tdAction.appendChild(delBtn);
       } else {
         tdAction.textContent = '-';
       }
@@ -369,6 +410,7 @@ adminRouter.get('/admin', (req, res) => {
       var msg = buildMessage(u);
       var tr = document.createElement('tr');
       tr.className = 'msg-row';
+      tr.id = 'msg-' + u.id;
       var td = document.createElement('td');
       td.colSpan = 6;
 
@@ -514,5 +556,18 @@ adminRouter.post('/api/admin/revoke', async (req, res) => {
     RETURNING token
   `;
   if (rows.length > 0 && rows[0].token) approvedTokens.delete(rows[0].token);
+  res.json({ success: true });
+});
+
+// ── Delete (approved or revoked only) ─────────────────────────────────────
+adminRouter.post('/api/admin/delete', async (req, res) => {
+  if (req.headers['x-admin-key'] !== ADMIN_KEY) { res.status(401).json({ error: 'Unauthorized' }); return; }
+  const rows = await sql`
+    DELETE FROM fd_users
+    WHERE id=${req.body.id} AND status IN ('approved', 'revoked')
+    RETURNING token, status
+  `;
+  if (rows.length === 0) { res.status(404).json({ error: 'Not found or cannot delete pending' }); return; }
+  if (rows[0].token) approvedTokens.delete(rows[0].token);
   res.json({ success: true });
 });
