@@ -1,164 +1,232 @@
-# FlowDev
+# FlowDev MCP
 
-**Connect any MCP-compatible AI directly to your VS Code workspace.**
+**A remote MCP server that connects any MCP-compatible AI directly to a developer's VS Code workspace.**
 
-Stop copy-pasting code between your AI and your editor. FlowDev lets Claude, Cursor, Windsurf, Cline, Continue (and any MCP client) read files, write code, search your codebase, run terminal commands, and push to GitHub — all from the chat window.
+Your AI reads files, writes code, searches your codebase, runs terminal commands, and pushes to GitHub — all from the chat window. No copy-pasting. No tab switching.
 
-Your code never leaves your machine. The cloud relay is only a secure bridge.
+[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/successO.flowdevmcp?label=VS%20Code%20Extension&color=6366f1)](https://marketplace.visualstudio.com/items?itemName=successO.flowdevmcp)
 
 ---
 
 ## How It Works
 
 ```
-You chat with your AI  (Claude, Cursor, etc.)
-           ↓
-FlowDev Cloud Relay  (flowdev.onrender.com)
-           ↓
-FlowDev VS Code Extension
-           ↓
-Your local files · terminal · Git
+You chat with your AI  (Claude.ai, Cursor, Windsurf, etc.)
+              ↓
+  FlowDev MCP Server  (flowdev.onrender.com)
+              ↓
+  FlowDev VS Code Extension  (on your machine)
+              ↓
+  Your local files · terminal · GitHub
 ```
 
-1. Install the FlowDev extension in VS Code  
-2. Request a free access token  
-3. Paste your personal MCP URL into your AI client  
-4. Start building — the AI can now work inside your real project
+The MCP server is a relay. Your AI sends tool calls to FlowDev, FlowDev forwards them to the VS Code extension via a persistent WebSocket, the extension executes them locally, and results come back to the AI in real time. Your code never leaves your machine.
 
 ---
 
-## Features
+## Getting Access
 
-| Category | Capabilities |
-|----------|--------------|
-| **Files** | Read, write, create, rename, delete, find & replace |
-| **Search** | Full-project search (grep-style) |
-| **Terminal** | Run any shell command safely |
-| **Navigation** | List directories, get full project structure |
-| **Git** | Status, diff, add, commit, push |
-| **Status** | Live connection indicator in VS Code status bar |
+**Sign in with GitHub — your token is generated instantly. No email, no waiting, no manual approval.**
 
----
+1. Go to **https://flowdev.onrender.com/login** (or **/request** — both go to the same place)
+2. Click **Continue with GitHub**
+3. Authorise FlowDev — your personal token is generated immediately
+4. Your dashboard shows your token and MCP URL ready to copy
 
-## Getting Started
-
-### 1. Request Access
-
-FlowDev uses approved access to keep quality high.
-
-**Request your free token:** [https://flowdev.onrender.com/request](https://flowdev.onrender.com/request)
-
-You will receive a personal token by email (usually within 24 hours).
-
-### 2. Install the Extension
-
-- Open VS Code
-- Go to Extensions (`Ctrl+Shift+X` / `Cmd+Shift+X`)
-- Search for **FlowDev MCP**
-- Click **Install**
-
-Or install from the VSIX in the `extension/flowdev-extension` folder.
-
-### 3. Connect
-
-1. Click the **FlowDev** icon in the Activity Bar
-2. Paste your access token and click **Connect**
-3. Copy your personal **MCP URL** shown in the sidebar
-
-### 4. Add to Your AI Client
-
-**Claude.ai**  
-Settings → Connectors → Add Custom Connector → paste your MCP URL → No sign-in
-
-**Cursor / Windsurf / Cline / Continue**  
-Add the MCP URL as a custom MCP server in the client settings.
-
-Once the status bar shows **FlowDev: Connected**, you’re ready.
+One token per GitHub account. Tokens are permanent until revoked.
 
 ---
 
-## Example Prompts
+## MCP Server URL
 
 ```
-Read my package.json and summarize the dependencies
-Search the whole project for every use of useEffect
-Add proper error handling to the Express routes
-Create a new utility file for date formatting
-Commit all changes with a clear message and push to main
+https://flowdev.onrender.com/mcp?token=YOUR_TOKEN
+```
+
+Add this as a custom MCP connector in any MCP-compatible AI client.
+
+---
+
+## Setup (3 steps after getting your token)
+
+**Step 1 — Install the VS Code Extension**
+
+Search **FlowDev MCP** in the VS Code Extensions panel, or:
+[Open in Marketplace](https://marketplace.visualstudio.com/items?itemName=successO.flowdevmcp)
+
+**Step 2 — Connect in VS Code**
+
+Click the **⚡ FlowDev icon** in the Activity Bar (left sidebar). Paste your token and click **Connect**. The sidebar shows your MCP URL once connected.
+
+**Step 3 — Add the MCP Connector in your AI**
+
+| AI Client | Where to add |
+|---|---|
+| Claude.ai | Settings → Connectors → Add Custom Connector → paste URL → select **"No sign-in"** → Connect |
+| Cursor | Settings → MCP → Add server → paste URL |
+| Windsurf | Settings → MCP Servers → Add → paste URL |
+| Cline / Continue | MCP Servers config → add URL |
+
+---
+
+## Tools (16 total)
+
+### File Operations
+| Tool | Description |
+|---|---|
+| `read_file` | Read any file in the project |
+| `write_file` | Write or create a file (with automatic code quality analysis) |
+| `find_and_replace` | Targeted text replacement — safer than rewriting an entire file |
+| `delete_file` | Delete a file (workspace-only, cannot touch system files) |
+| `rename_file` | Rename or move a file |
+| `create_directory` | Create a directory and any missing parents |
+
+### Search
+| Tool | Description |
+|---|---|
+| `search_in_files` | Grep-like search across the entire codebase — returns file, line number, and matching line |
+
+### Terminal
+| Tool | Description |
+|---|---|
+| `run_command` | Run any shell command (`npm install`, `python script.py`, etc.) |
+
+### Navigation
+| Tool | Description |
+|---|---|
+| `list_directory` | List files and folders in a directory |
+| `get_project_structure` | Full recursive file tree of the project |
+
+### Git
+| Tool | Description |
+|---|---|
+| `git_status` | Show current git status |
+| `git_diff` | Show unstaged or staged changes |
+| `git_add` | Stage files for commit |
+| `git_commit` | Commit with a message |
+| `git_push` | Push to GitHub |
+
+### Status
+| Tool | Description |
+|---|---|
+| `ping` | Verify connection and list available tools |
+
+---
+
+## Example Usage
+
+Once connected, talk to your AI naturally:
+
+```
+"Read my package.json and tell me what dependencies are outdated"
+
+"Search for all files that import from ../utils"
+
+"Add input validation to the registration endpoint in src/routes/auth.ts"
+
+"Run the tests and fix whatever is failing"
+
+"Commit everything with a descriptive message and push to main"
+
+"Create a new component at src/components/Card.tsx with basic TypeScript props"
 ```
 
 ---
 
-## Project Structure
+## Rate Limits
 
-```
-FlowDev/
-├── server/                 # Cloud relay + MCP server (Node.js + Express + Socket.io)
-│   └── src/
-│       ├── index.ts        # MCP tools + Socket.io bridge
-│       └── admin.ts        # Access request + admin dashboard
-├── extension/
-│   └── flowdev-extension/  # VS Code extension
-│       └── src/extension.ts
-└── README.md
+FlowDev applies rate limiting to protect free-tier infrastructure:
+
+| Endpoint | Limit |
+|---|---|
+| `/mcp` (AI tool calls) | 150 requests per 15 minutes per token |
+| `/auth` (GitHub OAuth) | 20 requests per 15 minutes per IP |
+| `/api` (admin API) | 200 requests per 15 minutes per IP |
+
+Exceeding a limit returns:
+```json
+{ "error": "Rate limit exceeded. Please slow down your AI agent requests.", "retryAfter": "15 minutes" }
 ```
 
 ---
 
 ## Security
 
-- Each user gets a unique personal token
-- Tokens are stored with VS Code SecretStorage (never in plain settings)
-- The relay does **not** store or log your source code
-- All file and terminal operations execute only on your local machine
-- Manual review before access is granted
+- **One token per GitHub account** — enforced at the database level with a unique index
+- **Tokens stored in VS Code SecretStorage** — not in settings.json or any readable file
+- **OAuth state parameter** — CSRF protection on the GitHub login flow
+- **Token passed via URL fragment** — never hits server logs after OAuth completes
+- **Token-based rate limiting** — limits are per token, not just per IP
+- **No code storage** — the relay only forwards tool calls and results, never stores file contents
+- **Workspace-only file access** — delete and write operations are restricted to the open VS Code workspace
 
 ---
 
-## Status Bar States
+## Admin Panel
 
-| Status | Meaning |
-|--------|---------|
-| `FlowDev: Connected` | AI can access your workspace |
-| `FlowDev: Connecting...` | Establishing connection |
-| `FlowDev: Waking server...` | Cold start (usually < 30s) |
-| `FlowDev: Reconnecting...` | Temporary disconnect, auto-retry |
-| `FlowDev: Setup Required` | Token not set yet |
+The admin panel at `/admin?key=YOUR_ADMIN_KEY` shows every user who has signed in via GitHub, including:
+
+- GitHub avatar and username (with a link to their profile)
+- Name and email pulled from their GitHub account
+- Their FlowDev token and MCP URL (with one-click copy)
+- Sign-in date and current status (approved / revoked)
+- **Revoke** and **Delete** actions per user
+- Auto-refreshes every 30 seconds — new sign-ins appear without a manual reload
 
 ---
 
-## Development
+## Tech Stack
 
-### Server
+| Layer | Technology |
+|---|---|
+| MCP Server | Node.js · TypeScript · Express · [@modelcontextprotocol/sdk](https://github.com/modelcontextprotocol/typescript-sdk) |
+| Relay | Socket.io (persistent WebSocket per user) |
+| Auth | GitHub OAuth 2.0 |
+| Database | Neon PostgreSQL (serverless) |
+| Rate limiting | express-rate-limit |
+| VS Code Extension | TypeScript · VS Code Extension API · socket.io-client |
+| Hosting | Render.com |
+
+---
+
+## Self-Hosting
+
+Clone the repo and set these environment variables:
+
+```env
+DATABASE_URL=postgresql://...        # Neon or any PostgreSQL
+GITHUB_CLIENT_ID=...                 # GitHub OAuth App client ID
+GITHUB_CLIENT_SECRET=...             # GitHub OAuth App client secret
+PUBLIC_URL=https://your-domain.com   # Your deployed URL
+ADMIN_KEY=your-secret-admin-key      # Admin dashboard key
+PORT=3000
+```
+
+**GitHub OAuth App setup:**
+1. Go to GitHub → Settings → Developer settings → OAuth Apps → New OAuth App
+2. Homepage URL: your `PUBLIC_URL`
+3. Authorization callback URL: `PUBLIC_URL/auth/github/callback`
+4. Copy the Client ID and generate a Client Secret
+
 ```bash
 cd server
 npm install
-npm run dev          # development with nodemon
-npm run build && npm start
+npm run build
+npm start
 ```
 
-### Extension
-```bash
-cd extension/flowdev-extension
-npm install
-npm run compile
-# Press F5 in VS Code to launch Extension Development Host
-```
+---
+
+## MCP Marketplace Listings
+
+- [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=successO.flowdevmcp)
+- [GitHub](https://github.com/Oko300/FlowDev)
 
 ---
 
 ## Links
 
-- **Request Access:** [https://flowdev.onrender.com/request](https://flowdev.onrender.com/request)
-- **Marketplace / Extension:** Search “FlowDev MCP” in VS Code
-- **GitHub:** [https://github.com/Oko300/FlowDev](https://github.com/Oko300/FlowDev)
-- **X:** [@success_o1](https://x.com/success_o1)
-- **LinkedIn:** [Success O](https://www.linkedin.com/in/success-o-1376b1344)
-
----
-
-## License
-
-MIT
-
-Built with focus by [Oko300](https://github.com/Oko300).
+- **Get access:** https://flowdev.onrender.com/login
+- **GitHub:** https://github.com/Oko300/FlowDev
+- **X:** https://x.com/success_o1
+- **LinkedIn:** https://www.linkedin.com/in/success-o-1376b1344

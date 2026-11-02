@@ -6,7 +6,10 @@ import { Server as SocketServer } from "socket.io";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
+import rateLimit from "express-rate-limit";
+import cookieParser from "cookie-parser";
 import { adminRouter, validateToken, initDB } from './admin';
+import { authRouter, migrateGithubColumns } from './auth';
 dotenv.config();
 
 const app = express();
@@ -15,17 +18,89 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
+app.use(cookieParser());
+
+// ─────────────────────────────────────────
+// RATE LIMITING
+// Protects Render free tier from AI agent loops and abuse.
+// MCP endpoint: 100 req / 15 min per IP.
+// Auth endpoints: 20 req / 15 min (prevent OAuth spam).
+// ─────────────────────────────────────────
+const mcpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 150,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    // Rate-limit per token when available, fall back to IP
+    const token = (req.query.token as string) || (req.headers['x-flowdev-token'] as string);
+    return token || req.ip || 'unknown';
+  },
+  handler: (_req, res) => {
+    res.status(429).json({
+      error: "Rate limit exceeded. Please slow down your AI agent requests.",
+      retryAfter: "15 minutes"
+    });
+  }
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => {
+    res.status(429).json({ error: "Too many authentication attempts. Please try again in 15 minutes." });
+  }
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => {
+    res.status(429).json({ error: "Rate limit exceeded. Please slow down your requests." });
+  }
+});
+
+// Apply rate limiters
+app.use('/mcp', mcpLimiter);
+app.use('/auth', authLimiter);
+app.use('/api', apiLimiter);
+
 app.use(adminRouter);
+app.use(authRouter);
 
 // ─────────────────────────────────────────
 // SOCKET.IO — relay bridge to VS Code extension
 // ─────────────────────────────────────────
 const io = new SocketServer(httpServer, {
-  cors: { origin: "*" }
+  cors: { origin: "*" },
+  // More tolerant timeouts for Render free tier latency spikes.
+  // Default pingTimeout (20s) is too tight — Render can stall for 5-10s under load.
+  pingInterval: 25000,   // how often server pings the client
+  pingTimeout:  60000,   // how long to wait for pong before declaring dead
 } as any);
 
 // Which users have VS Code open and connected — keyed by their personal token
 const connectedExtensions = new Map<string, string>();
+
+// Last heartbeat timestamp per userId. Extension sends a ping every 25s.
+// If no heartbeat for 90s the connection is considered a ghost and removed.
+const lastHeartbeat = new Map<string, number>();
+
+// Stale-connection cleanup — runs every 60s
+setInterval(() => {
+  const threshold = Date.now() - 90_000;
+  for (const [uid, ts] of lastHeartbeat) {
+    if (ts < threshold) {
+      connectedExtensions.delete(uid);
+      lastHeartbeat.delete(uid);
+      console.log(`🧹 Removed ghost connection: ${uid.substring(0, 12)}...`);
+    }
+  }
+}, 60_000);
 
 // Pending tool calls waiting for extension to respond
 const pendingRequests = new Map<string, {
@@ -49,8 +124,17 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     connectedExtensions.delete(userId);
+    lastHeartbeat.delete(userId);
     console.log(`❌ VS Code Extension disconnected — user: ${userId.substring(0, 12)}...`);
   });
+
+  // Update heartbeat timestamp when extension pings us
+  socket.on("heartbeat", () => {
+    lastHeartbeat.set(userId, Date.now());
+  });
+
+  // Seed the heartbeat so the extension gets 90s grace on first connect
+  lastHeartbeat.set(userId, Date.now());
 
   socket.on("tool_result", ({ requestId, success, data, error }: any) => {
     const pending = pendingRequests.get(requestId);
@@ -65,16 +149,34 @@ io.on("connection", (socket) => {
   });
 });
 
-function relayToExtension(userId: string, tool: string, params: any): Promise<any> {
+// Wait up to `maxWaitMs` for the extension to appear in connectedExtensions.
+// This covers the reconnection gap after a Render redeploy or network blip:
+// the extension's Socket.io client reconnects within seconds, but there's a
+// brief window where it's not in the map yet — we shouldn't fail immediately.
+function waitForExtension(userId: string, maxWaitMs = 20000): Promise<void> {
+  if (connectedExtensions.has(userId)) return Promise.resolve();
   return new Promise((resolve, reject) => {
-    if (!userId || !connectedExtensions.has(userId)) {
-      reject(new Error(
-        "Your VS Code extension is not connected.\n" +
-        "Make sure FlowDev is running in VS Code and shows 'Connected ✅' in the status bar."
-      ));
-      return;
-    }
+    const start = Date.now();
+    const check = setInterval(() => {
+      if (connectedExtensions.has(userId)) {
+        clearInterval(check);
+        resolve();
+      } else if (Date.now() - start >= maxWaitMs) {
+        clearInterval(check);
+        reject(new Error(
+          "VS Code extension is not connected. " +
+          "Open VS Code and make sure FlowDev shows 'Connected' in the status bar, then try again."
+        ));
+      }
+    }, 500);
+  });
+}
 
+async function relayToExtension(userId: string, tool: string, params: any): Promise<any> {
+  // Wait for extension — handles the post-redeploy reconnection gap
+  await waitForExtension(userId);
+
+  return new Promise((resolve, reject) => {
     const requestId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
     const timeout = setTimeout(() => {
@@ -501,10 +603,11 @@ app.post('/oauth/token', (req, res) => {
 app.get("/", (_req, res) => {
   res.json({
     name: "FlowDev MCP Server",
-    version: "1.0.0",
+    version: "2.0.0",
     status: "running ✅",
     extensionsConnected: connectedExtensions.size,
-    mcpEndpoint: `/mcp?token=YOUR_TOKEN`,
+    getAccess: "/login",
+    mcpEndpoint: "/mcp?token=YOUR_TOKEN",
     tools: [
       "ping", "read_file", "write_file", "find_and_replace",
       "search_in_files", "create_directory", "delete_file", "rename_file",
@@ -516,17 +619,40 @@ app.get("/", (_req, res) => {
 
 // ─────────────────────────────────────────
 // START
+// Open the port immediately so Render marks the service live and the extension
+// can create its Socket.io connection right away. DB init happens in parallel —
+// the /mcp endpoint checks `serverReady` and returns 503 until it's true.
 // ─────────────────────────────────────────
-initDB().then(() => {
-  httpServer.listen(PORT, () => {
-    console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-    console.log(`  🚀  FlowDev Server is running`);
-    console.log(`  🌐  http://localhost:${PORT}`);
-    console.log(`  📡  MCP: http://localhost:${PORT}/mcp?token=YOUR_TOKEN`);
-    console.log(`  🔧  Tools: 16 tools available`);
-    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
-  });
-}).catch(err => {
-  console.error('❌ Failed to initialize database:', err.message);
-  process.exit(1);
+let serverReady = false;
+
+// Middleware: hold /mcp requests until DB is ready
+app.use('/mcp', (req, res, next) => {
+  if (!serverReady) {
+    res.status(503).json({
+      error: "Server is starting up. Please retry in a few seconds.",
+      retryAfter: 5
+    });
+    return;
+  }
+  next();
+});
+
+httpServer.listen(PORT, () => {
+  console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+  console.log(`  🚀  FlowDev Server is running`);
+  console.log(`  🌐  http://localhost:${PORT}`);
+  console.log(`  📡  MCP: http://localhost:${PORT}/mcp?token=YOUR_TOKEN`);
+  console.log(`  ⏳  Waiting for database...`);
+  console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+
+  // Init DB after port is open
+  Promise.all([initDB(), migrateGithubColumns()])
+    .then(() => {
+      serverReady = true;
+      console.log(`✅  Server fully ready — accepting MCP connections`);
+    })
+    .catch(err => {
+      console.error('❌ Database init failed:', err.message);
+      process.exit(1);
+    });
 });

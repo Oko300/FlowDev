@@ -132,10 +132,11 @@ function connectToServer(token: string, context: vscode.ExtensionContext, view?:
   socket = io(SERVER_URL, {
     query: { userId: token },
     reconnection: true,
-    reconnectionDelay: 2000,
-    reconnectionDelayMax: 10000,
-    reconnectionAttempts: Infinity,
-    timeout: 30000,
+    reconnectionDelay: 1000,       // start retrying after 1s
+    reconnectionDelayMax: 5000,    // never wait more than 5s between retries
+    randomizationFactor: 0.3,      // small jitter to avoid thundering herd
+    reconnectionAttempts: Infinity, // keep trying forever until manual disconnect
+    timeout: 30000,                // 30s for initial connect (Render cold start)
   });
 
   const notify = (msg: any) => {
@@ -148,6 +149,17 @@ function connectToServer(token: string, context: vscode.ExtensionContext, view?:
     statusBar.text = '$(radio-tower) FlowDev: Connected';
     statusBar.tooltip = 'FlowDev — Connected. Click to open settings.';
     notify({ command: 'connected', mcpUrl });
+
+    // Send heartbeat immediately on connect, then every 25 seconds
+    // The server removes ghost connections after 90s without a heartbeat
+    socket?.emit('heartbeat');
+    const heartbeatInterval = setInterval(() => {
+      if (socket?.connected) {
+        socket.emit('heartbeat');
+      } else {
+        clearInterval(heartbeatInterval);
+      }
+    }, 25_000);
   });
 
   socket.on('disconnect', () => {
@@ -655,10 +667,27 @@ class FlowDevSidebarProvider implements vscode.WebviewViewProvider {
           break;
         }
         case 'disconnect': {
+          // Only disconnect the socket — never auto-delete the token.
+          // Deleting the token causes a doom loop: new token in VS Code but old token
+          // still in Claude's connector URL, so Claude can never reach the extension.
           socket?.disconnect();
           socket = null;
-          statusBar.text = '$(plug) FlowDev';
+          statusBar.text = '$(circle-slash) FlowDev: Disconnected';
+          this._view?.webview.postMessage({ command: 'disconnected' });
+          break;
+        }
+        case 'forgetToken': {
+          // Explicit "forget token" — warns the user they must also update their AI connector URL
+          const confirmed = await vscode.window.showWarningMessage(
+            '⚠️ This removes your token from VS Code. You will need to:\n\n1. Paste a new token here\n2. Update your MCP URL in Claude.ai (or any AI you use)\n\nYour existing connector URL will stop working. Continue?',
+            { modal: true },
+            'Yes, forget token'
+          );
+          if (confirmed !== 'Yes, forget token') return;
+          socket?.disconnect();
+          socket = null;
           await this.context.secrets.delete('flowdev.token');
+          statusBar.text = '$(key) FlowDev: Setup Required';
           this._view?.webview.postMessage({ command: 'cleared' });
           break;
         }
@@ -734,7 +763,8 @@ class FlowDevSidebarProvider implements vscode.WebviewViewProvider {
     <p style="font-size:11px;color:var(--vscode-descriptionForeground);margin-bottom:8px;line-height:1.5">Settings → Connectors → Add Custom Connector → paste your MCP URL</p>
   </div>
   <hr class="divider">
-  <button class="btn btn-danger" onclick="disconnect()">Disconnect & Clear Token</button>
+  <button class="btn btn-secondary" onclick="disconnect()" style="margin-bottom:6px">Disconnect</button>
+  <button class="btn btn-danger" onclick="forgetToken()">Forget Token</button>
 </div>
 
 <div id="setup-view">
@@ -762,7 +792,15 @@ class FlowDevSidebarProvider implements vscode.WebviewViewProvider {
     showSuccess('Connecting...');
     vscode.postMessage({ command: 'saveToken', token });
   }
-  function disconnect() { vscode.postMessage({ command: 'disconnect' }); showSetup(); }
+  function disconnect() {
+    // Only drops the socket — token stays. Extension will reconnect on next VS Code start.
+    vscode.postMessage({ command: 'disconnect' });
+    showReconnecting('');
+  }
+  function forgetToken() {
+    // Sends to extension host which shows a modal warning about updating Claude URL too
+    vscode.postMessage({ command: 'forgetToken' });
+  }
   function getAccess() { vscode.postMessage({ command: 'getAccess' }); }
   function copyUrl() { vscode.postMessage({ command: 'copyUrl', url: mcpUrl }); }
 
