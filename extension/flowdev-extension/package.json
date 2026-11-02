@@ -2,7 +2,7 @@
   "name": "flowdevmcp",
   "displayName": "FlowDev MCP",
   "description": "Connect any MCP-compatible AI to your VS Code workspace. Your AI reads files, writes code, searches your codebase, runs terminal commands, and pushes to GitHub directly in your editor. Works with Claude, Cursor, Windsurf, Cline, Continue and any AI that supports MCP.",
-  "version": "1.0.7",
+  "version": "1.0.9",
   "publisher": "successO",
   "icon": "images/icon.png",
   "galleryBanner": {
@@ -103,6 +103,7 @@
     "@types/vscode": "^1.85.0",
     "@vscode/test-cli": "^0.0.15",
     "@vscode/test-electron": "^3.0.0",
+    "@vscode/vsce": "^4.1.0",
     "esbuild": "^0.25.0",
     "eslint": "^10.5.0",
     "typescript": "^6.0.3",

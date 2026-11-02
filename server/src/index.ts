@@ -118,6 +118,19 @@ io.on("connection", (socket) => {
     return;
   }
 
+  // If this user already has a live socket registered, it's stale (e.g. a
+  // reload that didn't cleanly tear down the old connection) — force it out
+  // so we never have two sockets silently sharing the same userId room.
+  const existingSocketId = connectedExtensions.get(userId);
+  if (existingSocketId && existingSocketId !== socket.id) {
+    const staleSocket = io.sockets.sockets.get(existingSocketId);
+    if (staleSocket) {
+      staleSocket.leave(`user:${userId}`);
+      staleSocket.disconnect(true);
+      console.log(`🔁 Replaced stale socket for user: ${userId.substring(0, 12)}...`);
+    }
+  }
+
   connectedExtensions.set(userId, socket.id);
   socket.join(`user:${userId}`);
   console.log(`🔌 VS Code Extension connected — user: ${userId.substring(0, 12)}...`);
@@ -128,9 +141,14 @@ io.on("connection", (socket) => {
     console.log(`❌ VS Code Extension disconnected — user: ${userId.substring(0, 12)}...`);
   });
 
-  // Update heartbeat timestamp when extension pings us
+  // Update heartbeat timestamp when extension pings us, and ack it so the
+  // extension can detect a dead link itself instead of relying only on
+  // Engine.IO's internal ping/pong, which some proxies swallow in one
+  // direction only (server tears the socket down but the client never
+  // finds out).
   socket.on("heartbeat", () => {
     lastHeartbeat.set(userId, Date.now());
+    socket.emit("heartbeat_ack");
   });
 
   // Seed the heartbeat so the extension gets 90s grace on first connect

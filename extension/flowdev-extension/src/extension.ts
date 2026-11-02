@@ -150,16 +150,34 @@ function connectToServer(token: string, context: vscode.ExtensionContext, view?:
     statusBar.tooltip = 'FlowDev — Connected. Click to open settings.';
     notify({ command: 'connected', mcpUrl });
 
-    // Send heartbeat immediately on connect, then every 25 seconds
-    // The server removes ghost connections after 90s without a heartbeat
+    // Two-way liveness check: emit a heartbeat and expect an ack back.
+    // Engine.IO's built-in ping/pong alone isn't enough — a proxy can tear
+    // down the server-side socket while the client never receives the close
+    // frame, leaving the client's socket object reporting .connected === true
+    // indefinitely. Tracking our own app-level ack lets us notice that and
+    // force a real reconnect instead of sitting "Connected" on a dead link.
+    let lastAck = Date.now();
     socket?.emit('heartbeat');
+
     const heartbeatInterval = setInterval(() => {
-      if (socket?.connected) {
-        socket.emit('heartbeat');
-      } else {
+      if (!socket?.connected) {
         clearInterval(heartbeatInterval);
+        return;
       }
+      if (Date.now() - lastAck > 70_000) {
+        console.log('[FlowDev] No heartbeat ack in 70s — forcing reconnect');
+        clearInterval(heartbeatInterval);
+        statusBar.text = '$(sync~spin) FlowDev: Reconnecting...';
+        statusBar.tooltip = 'FlowDev — Lost connection, retrying automatically...';
+        notify({ command: 'reconnecting', mcpUrl });
+        connectToServer(token, context, view);
+        return;
+      }
+      socket.emit('heartbeat');
     }, 25_000);
+
+    socket?.off('heartbeat_ack');
+    socket?.on('heartbeat_ack', () => { lastAck = Date.now(); });
   });
 
   socket.on('disconnect', () => {
@@ -644,17 +662,24 @@ class FlowDevSidebarProvider implements vscode.WebviewViewProvider {
     webviewView.webview.options = { enableScripts: true };
     webviewView.webview.html = this.getHTML();
 
-    this.context.secrets.get('flowdev.token').then(token => {
-      if (!token) return;
-      if (socket?.connected) {
-        this._view?.webview.postMessage({ command: 'connected', mcpUrl: `${SERVER_URL}/mcp?token=${token}` });
-      } else {
-        this._view?.webview.postMessage({ command: 'reconnecting', mcpUrl: `${SERVER_URL}/mcp?token=${token}` });
-      }
-    });
+    // Current connection state is sent only once the webview tells us it's
+    // ready (see the 'ready' case below) instead of right here. Posting it
+    // immediately after setting .html races the webview's own script load —
+    // if the host wins that race the message is silently dropped and the
+    // sidebar gets stuck showing the setup screen even when actually connected.
 
     webviewView.webview.onDidReceiveMessage(async (message) => {
       switch (message.command) {
+        case 'ready': {
+          const token = await this.context.secrets.get('flowdev.token');
+          if (!token) return;
+          if (socket?.connected) {
+            this._view?.webview.postMessage({ command: 'connected', mcpUrl: `${SERVER_URL}/mcp?token=${token}` });
+          } else {
+            this._view?.webview.postMessage({ command: 'reconnecting', mcpUrl: `${SERVER_URL}/mcp?token=${token}` });
+          }
+          break;
+        }
         case 'saveToken': {
           const token = message.token?.trim();
           if (!token || token.length < 10) {
@@ -851,6 +876,10 @@ class FlowDevSidebarProvider implements vscode.WebviewViewProvider {
     else if (msg.command === 'status') showSuccess(msg.text);
     else if (msg.command === 'hasToken') showReconnecting('');
   });
+
+  // Tell the extension host we're ready to receive state — avoids a race
+  // where an early postMessage (sent before this listener existed) gets lost.
+  vscode.postMessage({ command: 'ready' });
 </script>
 </body>
 </html>`;
